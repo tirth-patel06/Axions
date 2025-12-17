@@ -9,6 +9,7 @@ require("./config/passport");
 
 const authRoutes = require("./routes/auth");
 const testRoutes = require("./routes/test");
+const githubRoutes = require("./routes/github");
 
 const app = express();
 
@@ -20,5 +21,6 @@ app.use(passport.initialize());
 
 app.use("/api/auth", authRoutes);
 app.use("/api/test", testRoutes);
+app.use("/api/github", githubRoutes);
 
 module.exports = app;

@@ -17,6 +17,7 @@
   "homepage": "https://github.com/tirth-patel06/Axions#readme",
   "description": "",
   "dependencies": {
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",

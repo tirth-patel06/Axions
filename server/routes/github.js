@@ -24,8 +24,14 @@ router.get("/repos", auth, async (req, res) => {
       direction: "desc",
     });
 
+    // Only include repositories owned by the authenticated user and not forks
+    const owned = repos.data.filter((repo) => {
+      const isOwner = repo?.owner?.login === user.username;
+      return isOwner;
+    });
+
     // return only what frontend needs
-    const formatted = repos.data.map((repo) => ({
+    const formatted = owned.map((repo) => ({
       id: repo.id,
       name: repo.name,
       fullName: repo.full_name,

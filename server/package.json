@@ -18,7 +18,10 @@
   "homepage": "https://github.com/tirth-patel06/Axions#readme",
   "description": "",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@octokit/app": "^16.1.2",
     "@octokit/rest": "^22.0.1",
+    "@octokit/webhooks": "^14.2.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
@@ -28,7 +31,9 @@
     "mongoose": "^9.0.1",
     "morgan": "^1.10.1",
     "nodemon": "^3.1.11",
+    "parse-diff": "^0.11.1",
     "passport": "^0.7.0",
-    "passport-github2": "^0.1.12"
+    "passport-github2": "^0.1.12",
+    "smee-client": "^5.0.0"
   }
 }

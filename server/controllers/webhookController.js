@@ -8,15 +8,24 @@ async function githubWebhookHandler(req, res) {
     const event = req.headers["x-github-event"];
 
     if (!signature || !event) {
-      return res.status(400).send("Missing headers");
+      return res.status(400).send("Missing required headers");
     }
 
-    const payload = JSON.parse(req.body.toString());
+    // Handle ping event early
+    if (event === "ping") {
+      return res.status(200).send("PONG");
+    }
 
-    // repo
+    let payload;
+    try {
+      payload = JSON.parse(req.body.toString());
+    } catch {
+      return res.status(400).send("Invalid JSON payload");
+    }
+
     const githubRepoId = payload.repository?.id;
     if (!githubRepoId) {
-      return res.status(400).send("Invalid payload");
+      return res.status(400).send("Repository not found in payload");
     }
 
     const connectedRepo = await ConnectedRepo.findOne({
@@ -24,33 +33,34 @@ async function githubWebhookHandler(req, res) {
       isConnected: true,
     }).populate("userId");
 
-    if (!connectedRepo) {
+    if (!connectedRepo || !connectedRepo.webhookSecret) {
       return res.status(404).send("Repo not connected");
     }
 
-    // verify signature
+    // Verify signature
     const hmac = crypto.createHmac(
       "sha256",
       connectedRepo.webhookSecret
     );
+
     const digest =
       "sha256=" + hmac.update(req.body).digest("hex");
 
+    const sigBuffer = Buffer.from(signature);
+    const digestBuffer = Buffer.from(digest);
+
     if (
-      !crypto.timingSafeEqual(
-        Buffer.from(signature),
-        Buffer.from(digest)
-      )
+      sigBuffer.length !== digestBuffer.length ||
+      !crypto.timingSafeEqual(sigBuffer, digestBuffer)
     ) {
       return res.status(401).send("Invalid signature");
     }
 
-    // 3️⃣ route events
+    // Route events
     if (event === "pull_request") {
       await handlePullRequest(payload, connectedRepo);
     }
 
-    // issues / comments can be added later
     return res.status(200).send("OK");
   } catch (err) {
     console.error("Webhook error:", err);

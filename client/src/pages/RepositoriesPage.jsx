@@ -8,6 +8,7 @@ export default function RepositoriesPage() {
   const [repos, setRepos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchRepositories();
@@ -15,8 +16,27 @@ export default function RepositoriesPage() {
 
   const fetchRepositories = async () => {
     try {
-      const { data } = await api.get('/api/github/repos');
-      setRepos(data?.repos || []);
+      // Fetch both GitHub repos and connected repos in parallel
+      const [githubResponse, connectedResponse] = await Promise.all([
+        api.get('/api/github/repos'),
+        api.get('/api/repos/connected'),
+      ]);
+
+      const githubRepos = githubResponse.data?.repos || [];
+      const connectedRepos = connectedResponse.data?.repos || [];
+
+      // Create a Set of connected repo IDs for quick lookup
+      const connectedIds = new Set(
+        connectedRepos.map((repo) => repo.githubRepoId)
+      );
+
+      // Merge connection status into GitHub repos
+      const mergedRepos = githubRepos.map((repo) => ({
+        ...repo,
+        connected: connectedIds.has(repo.id),
+      }));
+
+      setRepos(mergedRepos);
     } catch (error) {
       console.error('Failed to fetch repositories:', error);
     } finally {
@@ -24,16 +44,35 @@ export default function RepositoriesPage() {
     }
   };
 
-  const handleConnect = async (repoId) => {
-    setConnecting(repoId);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  const handleConnect = async (repo) => {
+    setConnecting(repo.id);
+    setError(null);
 
-    setRepos((prev) =>
-      prev.map((repo) =>
-        repo.id === repoId ? { ...repo, connected: true } : repo
-      )
-    );
-    setConnecting(null);
+    try {
+      await api.post('/api/repos/connect', {
+        githubRepoId: repo.id,
+        owner: repo.owner,
+        name: repo.name,
+        fullName: repo.fullName,
+        isPrivate: repo.private,
+      });
+
+      // Update local state on success
+      setRepos((prev) =>
+        prev.map((r) =>
+          r.id === repo.id ? { ...r, connected: true } : r
+        )
+      );
+    } catch (err) {
+      console.error('Failed to connect repository:', err);
+      const message = err.response?.data?.error || 'Failed to connect repository';
+      setError(message);
+      
+      // Auto-dismiss error after 4 seconds
+      setTimeout(() => setError(null), 4000);
+    } finally {
+      setConnecting(null);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -58,6 +97,12 @@ export default function RepositoriesPage() {
       </header>
 
       <div className="max-w-7xl mx-auto px-6 py-12">
+        {error && (
+          <div className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg">
+            <p className="text-red-200 text-sm">{error}</p>
+          </div>
+        )}
+
         <div className="mb-12">
           <h1 className="text-4xl font-bold text-white mb-3">
             Your GitHub Repositories
@@ -138,7 +183,7 @@ export default function RepositoriesPage() {
                       </div>
                     ) : (
                       <button
-                        onClick={() => handleConnect(repo.id)}
+                        onClick={() => handleConnect(repo)}
                         disabled={connecting === repo.id}
                         className="w-full py-3 px-4 rounded-lg bg-white text-black font-medium hover:bg-gray-100 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2"
                       >

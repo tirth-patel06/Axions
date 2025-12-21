@@ -10,6 +10,8 @@ require("./config/passport");
 const authRoutes = require("./routes/auth");
 const testRoutes = require("./routes/test");
 const githubRoutes = require("./routes/github");
+const repoRoutes = require("./routes/repos");
+const webhookRoutes = require("./routes/webhooks");
 
 const app = express();
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
@@ -23,5 +25,7 @@ app.use(passport.initialize());
 app.use("/api/auth", authRoutes);
 app.use("/api/test", testRoutes);
 app.use("/api/github", githubRoutes);
+app.use("/api/repos", repoRoutes);
+app.use("/webhooks", webhookRoutes);
 
 module.exports = app;

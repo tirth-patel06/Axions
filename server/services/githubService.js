@@ -12,10 +12,10 @@ import { getAIReviewForFile, generatePRTextSummary } from './llmService.js';
 // 1. AUTHENTICATE GITHUB APP
 // -------------------------------------------------
 const app = new App({
-  appId: '2188930',
+  appId: '',
   privateKey: "-----BEGIN RSA PRIVATE KEY-----\nMIIEpQIBAAKCAQEAxqdg4uScVx6nZXNQk2dUM08i7q7Ig4KwMkRSw4XzE07cTO/8\n6FZThyjdXqP06fy0PMlEbCPFWMJ4+h2CizvYmbV2PKu99NCbkdKoPAJAKj3TfdXO\nlE2yCJ328fDJUiCjpAMqx2Pow2Jf5iWcgqWHaMPvsMUOZarGmAFxCI2vJ6bSJfki\n6TusOMQhuEygEp8cT2v+LcE0WDPwW37nmSbLAIQBKS9w6mlefF2jQP4lYm2kdAKu\nrOkKEbgpCakqdG21s4s0LTCaxGh5yXG+orrn8bghu5ROx2PuCDrJhPWOGngQIU9Y\nFy3yFcNE3md72puVcXjDu4seFrqRT7mJm9zTDQIDAQABAoIBAQCZcN2wQ77SuBW6\nkeiSAsUR4LVtwUmV8xMfsJBw//zyU/5r2w7xcwSPqKvcly3sskmRjjCwiqy7U3NY\nVgTogPBcQcKzOEDAYYVYjGtv9pkTR7AdSVGIUb8LUuBUnpUSP63GWL/pRS2cBVdn\nkHOkojDGZlm0o3DsbI17CdoCLlY1fBFJKDu5cImCqFWuKpFHv7fKkxNRZh59PK6p\nXd5IBMcyDIynd4pE7TDa2nAyFvgrZCglucbjKahTVXAlWi3HbMcBC/wIZFHg0Ny9\n7NiPcNAYDZ628yYJZWkXeEo/SXb3gSUNmHmsBqzdHAMeZNrLR1qK3vke1v7R59Pl\n/rMnxdFBAoGBAP+PrIo1J9Ak+qc+S9TxJCh5LK3mAA9+Kfwx4MDZWLUciT750Rx3\n+LdGgLu4awIwGcJDr9wEKIV6gnT8Vh9HwZiOurQUctrUfBf3K2UFc17dtomcjtkz\nlleCcn8FdCu6QTkQ/KFC1pcILcyBICKyickqu/4/RBvZmjHnNimaY7bdAoGBAMb+\nsTCNYO522RkvDzGwYZz9AZyCjV0r/WHRPuqIqorhH53o4/eqXDFgrj8dxWjiAfrJ\nm3n3bIkoSBGQy2TcV1KlC2vZzsk7TAqFK3+9NB5CyBhbx3K2VNCUaTEmBReqh3BS\nvdbapp4Y6aAuwLCE0AUeNNq8mWRfwTuWzb2ALRHxAoGBAK7/Zin5vjqEp/MP8INv\nYNAqMdMetRnmzb85NGs6KclTMhQiovO4n2J477wby4LjBzCEgw7I9ip4uo57IEop\nK8NYsTaQ7hk0+Yi7o0Z41gi3D8DpqNPIxIFF/TtHs8Yhs3ntTODsUN95JUttfGDm\nGv3auoKeNfhQKItVhTw10WQtAoGAYYyzUejMjrnGPTk7ipE7mNjSdGXvZLBO2yfX\nXuO2LrSjaiajsmJaJX6OjLRMdNjuPYGdbRHkq+wKQEop2vzE9eegjLNOUol2AmY7\n57fZl8gHDSHYyRwmwcUvN/+6WVqoYGC/XVb8fN4bkQG6Rg4lZ4ziPiRcUb87G7oW\ni4INFhECgYEAkPsyRrm2l535g7lbN8RAiRDhu95FYELtsGtbEZmOiT/eXCAxoG0r\n2xQOwHA/g12vFaGhfgVXaMhoQQYZWg0fK77k1ni6mT8kGGw2AQH6FbYxDJ9dvW+g\nre8p5jNm7mzUzx1C38ocJ2Su5WITVtWu+At7JeZg9EeJz6WjbljDh+U=\n-----END RSA PRIVATE KEY-----\n",
   webhooks: {
-    secret: 'just-demo'
+    secret: 'secre'
   },
   Octokit: Octokit,
 });

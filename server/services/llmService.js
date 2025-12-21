@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 // -------------------------------------------------
 // 1. AUTHENTICATE AI CLIENT
 // -------------------------------------------------
-const genAI = new GoogleGenerativeAI('AIzaSyAG8yJeLLtH7a5vJ9OL2dYMqBSiP-kChg4');
+const genAI = new GoogleGenerativeAI(apikey);
 const aiModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
 // -------------------------------------------------

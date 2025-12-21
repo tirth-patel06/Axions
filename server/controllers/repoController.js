@@ -79,6 +79,28 @@ async function connectRepo(req, res) {
   }
 }
 
+/*GET /api/repos/connected*/
+async function getConnectedRepos(req, res) {
+  try {
+    const userId = req.user._id;
+
+    const connectedRepos = await ConnectedRepo.find({
+      userId,
+      isConnected: true,
+    }).select('githubRepoId owner name fullName isPrivate connectedAt');
+
+    return res.json({
+      repos: connectedRepos,
+    });
+  } catch (err) {
+    console.error('Get connected repos error:', err);
+    return res.status(500).json({
+      error: 'Failed to fetch connected repositories',
+    });
+  }
+}
+
 module.exports = {
   connectRepo,
+  getConnectedRepos,
 };

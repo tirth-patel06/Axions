@@ -94,6 +94,7 @@ async function orchestrateReview(payload, connectedRepo) {
     recordStatsAsync({
       owner,
       repo,
+      githubRepoId: connectedRepo.githubRepoId,
       pull_number,
       commit_id,
       analysis,
@@ -129,6 +130,7 @@ async function orchestrateReview(payload, connectedRepo) {
     recordErrorAsync({
       owner,
       repo,
+      githubRepoId: connectedRepo.githubRepoId,
       pull_number,
       error,
       user: connectedRepo.userId
@@ -150,19 +152,19 @@ async function orchestrateReview(payload, connectedRepo) {
  * 
  * @private
  */
-function recordStatsAsync({ owner, repo, pull_number, commit_id, analysis, user, repoId }) {
+function recordStatsAsync({ owner, repo, githubRepoId, pull_number, commit_id, analysis, user, repoId }) {
   setImmediate(async () => {
     try {
       await statsService.recordReview({
         owner,
         repo,
+        githubRepoId,
         pull_number,
         commit_id,
         analysis,
-        user
+        user,
+        repoId
       });
-
-      await statsService.incrementReviewCount(repoId);
     } catch (error) {
       console.error("⚠️  Stats recording failed (non-critical):", error.message);
     }
@@ -175,12 +177,13 @@ function recordStatsAsync({ owner, repo, pull_number, commit_id, analysis, user,
  * 
  * @private
  */
-function recordErrorAsync({ owner, repo, pull_number, error, user }) {
+function recordErrorAsync({ owner, repo, githubRepoId, pull_number, error, user }) {
   setImmediate(async () => {
     try {
       await statsService.recordError({
         owner,
         repo,
+        githubRepoId,
         pull_number,
         error,
         user

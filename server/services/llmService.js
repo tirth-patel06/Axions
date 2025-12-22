@@ -86,53 +86,86 @@ async function generatePRTextSummary({ owner, repo, pull_number, totalFilesChang
   try {
     const tsNow = new Date().toISOString();
 
+    // Extract added lines from chunks (parse-diff structure)
+    const extractAddedLines = (file) => {
+      const added = [];
+      if (file.chunks && Array.isArray(file.chunks)) {
+        file.chunks.forEach(chunk => {
+          if (chunk.changes && Array.isArray(chunk.changes)) {
+            chunk.changes.forEach(change => {
+              if (change.add === true) {
+                added.push({
+                  line: change.ln,
+                  text: change.content
+                });
+              }
+            });
+          }
+        });
+      }
+      return added;
+    };
+
+    // Get file path from parse-diff structure
+    const getFilePath = (file) => {
+      return file.to || file.from || 'unknown';
+    };
+
     // Deterministic overview and key metrics
-    const totalAddedLines = filesForSummary.reduce((sum, f) => sum + (f.additions?.length || 0), 0);
-    const fileNames = filesForSummary.map(f => f.path).join(', ');
+    const totalAddedLines = filesForSummary.reduce((sum, f) => sum + extractAddedLines(f).length, 0);
+    const fileNames = filesForSummary.map(f => getFilePath(f)).join(', ');
 
     // Build an ASCII table of files changed
     const header = `| File | Added Lines | Comments |\n|---|---:|---:|`;
     const rows = filesForSummary.map(f => {
-      const added = f.additions?.length || 0;
-      const comments = commentsByFile?.[f.path] || 0;
-      return `| ${f.path} | ${added} | ${comments} |`;
+      const filePath = getFilePath(f);
+      const added = extractAddedLines(f).length;
+      const comments = commentsByFile?.[filePath] || 0;
+      return `| ${filePath} | ${added} | ${comments} |`;
     }).join('\n');
     const filesChangedTable = [header, rows].join('\n');
 
     // Per-file one-line description (deterministic)
     const perFileOneLiners = filesForSummary.map(f => {
-      const added = f.additions?.length || 0;
+      const filePath = getFilePath(f);
+      const added = extractAddedLines(f).length;
       const desc = added > 0 ? `Added ${added} line${added === 1 ? '' : 's'}.` : 'No added lines.';
-      return `${f.path}: ${desc}`;
+      return `${filePath}: ${desc}`;
     }).join('\n');
 
     // Per-line deterministic summaries
     const perLineDeterministic = filesForSummary.map(f => {
-      const lines = (f.additions || []).map(a => {
+      const filePath = getFilePath(f);
+      const addedLines = extractAddedLines(f);
+      const lines = addedLines.map(a => {
         const lineLabel = a.line == null ? '?' : String(a.line);
         const text = String(a.text || '').trim();
         return `L${lineLabel}: Adds '${text}'`;
       });
-      return [`File: ${f.path}`, ...lines].join('\n');
+      return [`File: ${filePath}`, ...lines].join('\n');
     }).join('\n\n');
 
     // Input for AI per-file summaries (uses only added lines)
     const perFileLineInput = filesForSummary
       .map(f => {
-        const lines = (f.additions || []).map(a => {
+        const filePath = getFilePath(f);
+        const addedLines = extractAddedLines(f);
+        const lines = addedLines.map(a => {
           const lineLabel = a.line == null ? '?' : String(a.line);
           const text = String(a.text || '').trim();
           return `L${lineLabel}: ${text}`;
         }).join('\n');
-        return `File: ${f.path}\n${lines}`;
+        return `File: ${filePath}\n${lines}`;
       })
       .join('\n\n');
 
     // Changes by file and line (deterministic, with timestamps)
     const perFileLineDetails = filesForSummary.map(f => {
+      const filePath = getFilePath(f);
       const ts = f.timestamp || tsNow;
-      const headerLine = `File: ${f.path}`;
-      const entries = (f.additions || []).map(a => {
+      const headerLine = `File: ${filePath}`;
+      const addedLines = extractAddedLines(f);
+      const entries = addedLines.map(a => {
         const lineLabel = a.line == null ? '?' : String(a.line);
         return `  - L${lineLabel} @ ${ts}: ${a.text}`;
       });
@@ -141,8 +174,9 @@ async function generatePRTextSummary({ owner, repo, pull_number, totalFilesChang
 
     // Diff blocks with proper line numbers (should not have undefined anymore)
     const perFileDiffBlocks = filesForSummary.map(f => {
+      const filePath = getFilePath(f);
       const cleaned = String(f.diff || '');
-      return `File: ${f.path}\n\n\`\`\`diff\n${cleaned}\n\`\`\``;
+      return `File: ${filePath}\n\n\`\`\`diff\n${cleaned}\n\`\`\``;
     }).join('\n\n');
 
     // AI-generated summaries per file (constrained, with fallback)
@@ -157,42 +191,26 @@ async function generatePRTextSummary({ owner, repo, pull_number, totalFilesChang
       aiPerFileSummaries = String(aiText).replace(/```[\s\S]*?```/g, '').trim();
     } catch {
       aiPerFileSummaries = filesForSummary.map(f => {
-        const added = f.additions?.length || 0;
-        const firstLine = (f.additions || [])[0]?.text;
+        const filePath = getFilePath(f);
+        const addedLines = extractAddedLines(f);
+        const added = addedLines.length;
+        const firstLine = addedLines[0]?.text;
         const hint = firstLine ? `Highlights: '${String(firstLine).trim()}'` : 'No specific highlight available.';
-        return `File: ${f.path}\nSummary: Added ${added} line${added === 1 ? '' : 's'}. ${hint}`;
+        return `File: ${filePath}\nSummary: Added ${added} line${added === 1 ? '' : 's'}. ${hint}`;
       }).join('\n\n');
     }
 
-    // Assemble final text
+    // Assemble final text - Clean, user-friendly format
     const pieces = [];
-    pieces.push('Pull Request Summary');
+    pieces.push('## PR Review Summary');
     pieces.push('');
-    pieces.push(`This pull request updates ${filesForSummary.length} files in ${owner}/${repo} (PR #${pull_number}).`);
-    pieces.push(`Added ${totalAddedLines} line${totalAddedLines === 1 ? '' : 's'} across: ${fileNames || 'no files'}.`);
+    pieces.push(`✅ **Reviewed ${filesForSummary.length} file${filesForSummary.length === 1 ? '' : 's'}** with ${totalComments} inline comment${totalComments === 1 ? '' : 's'}`);
     pieces.push('');
-    pieces.push('Key Changes (deterministic)');
-    pieces.push(`- Reviewed ${filesForSummary.length} out of ${totalFilesChanged} changed files.`);
-    pieces.push(`- Generated ${totalComments} inline comment${totalComments === 1 ? '' : 's'}.`);
-    pieces.push(`- Focused on newly added lines only.`);
-    pieces.push('');
-    pieces.push('Files Changed (table)');
+    pieces.push('### Changes by File');
     pieces.push(filesChangedTable);
     pieces.push('');
-    pieces.push('Summary For Each File');
+    pieces.push('### Analysis');
     pieces.push(aiPerFileSummaries);
-    pieces.push('');
-    pieces.push('Summary Per File');
-    pieces.push(perFileOneLiners);
-    pieces.push('');
-    pieces.push('Per-line change summary');
-    pieces.push(perLineDeterministic);
-    pieces.push('');
-    pieces.push('Changes by file and line (deterministic)');
-    pieces.push(perFileLineDetails);
-    pieces.push('');
-    pieces.push('Here are the diffs for context (only added lines are prefixed with line numbers):');
-    pieces.push(perFileDiffBlocks);
     return pieces.join('\n');
   } catch (err) {
     console.warn('Text summary generation failed, falling back to basic summary:', err.message);

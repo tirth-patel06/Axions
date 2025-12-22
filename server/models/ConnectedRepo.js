@@ -68,6 +68,22 @@ const connectedRepoSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+
+    // stats
+    reviewCount: {
+      type: Number,
+      default: 0,
+    },
+
+    totalCommentsPosted: {
+      type: Number,
+      default: 0,
+    },
+
+    lastReviewedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true, // adds createdAt & updatedAt

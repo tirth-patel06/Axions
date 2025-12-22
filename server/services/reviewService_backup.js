@@ -65,24 +65,10 @@ async function orchestrateReview(payload, connectedRepo) {
     console.log("🧠 Running AI analysis...");
     const analysis = await llmService.analyzeDiff(parsedFiles);
 
-    // Step 3: Generate detailed text summary for review body
-    console.log("📝 Generating detailed PR summary...");
-    const commentsByFile = {};
-    analysis.inlineComments.forEach(c => {
-      commentsByFile[c.path] = (commentsByFile[c.path] || 0) + 1;
-    });
-    
-    const reviewBody = await llmService.generatePRTextSummary({
-      owner,
-      repo,
-      pull_number,
-      totalFilesChanged: parsedFiles.length,
-      filesForSummary: parsedFiles,
-      commentsByFile,
-      totalComments: analysis.inlineComments.length
-    });
-
-    // Step 4: Prepare review for GitHub
+    // Step 3: Prepare review for GitHub
+    const reviewBody = analysis.inlineComments.length > 0
+      ? "AI review complete. Found some potential issues, please see the inline comments."
+      : "AI review complete. Looks good to me!";
 
     const reviewEvent = analysis.inlineComments.length > 0 ? "REQUEST_CHANGES" : "COMMENT";
 
@@ -92,7 +78,7 @@ async function orchestrateReview(payload, connectedRepo) {
       comments: analysis.inlineComments
     };
 
-    // Step 5: Post review to GitHub
+    // Step 4: Post review to GitHub
     console.log("📤 Posting review to GitHub...");
     await githubService.postReview({
       owner,
@@ -103,7 +89,7 @@ async function orchestrateReview(payload, connectedRepo) {
       review
     });
 
-    // Step 6: Record statistics (async, non-blocking)
+    // Step 5: Record statistics (async, non-blocking)
     console.log("📊 Recording statistics...");
     recordStatsAsync({
       owner,
@@ -209,5 +195,3 @@ function recordErrorAsync({ owner, repo, githubRepoId, pull_number, error, user 
 }
 
 module.exports = { orchestrateReview };
-
-

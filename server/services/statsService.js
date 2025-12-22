@@ -10,6 +10,8 @@
 const ConnectedRepo = require("../models/ConnectedRepo");
 const PullRequestReview = require("../models/PullRequestReview");
 const ErrorLog = require("../models/ErrorLog");
+const RepoStats = require("../models/RepoStats");
+const IssueTriage = require("../models/IssueTriage");
 
 /**
  * Records review statistics for a PR
@@ -51,7 +53,7 @@ async function recordReview({ owner, repo, githubRepoId, pull_number, commit_id,
       analyzedAt: new Date()
     });
 
-    // Update repo counters atomically
+    // Update ConnectedRepo counters atomically (compat)
     await ConnectedRepo.findByIdAndUpdate(
       repoId,
       {
@@ -64,6 +66,24 @@ async function recordReview({ owner, repo, githubRepoId, pull_number, commit_id,
         }
       },
       { new: true }
+    );
+
+    // Upsert aggregated RepoStats (fast reads)
+    const inlineCount = analysis?.inlineComments?.length || 0;
+    await RepoStats.findOneAndUpdate(
+      { repoId },
+      {
+        $setOnInsert: { repoId, githubRepoId, userId: user._id },
+        $inc: {
+          totalPRsReviewed: 1,
+          totalInlineComments: inlineCount,
+        },
+        $set: {
+          lastPRReviewedAt: new Date(),
+          lastActivityAt: new Date(),
+        },
+      },
+      { upsert: true, new: true }
     );
 
     console.log(`✅ Recorded review stats: ${owner}/${repo}#${pull_number}`);
@@ -104,29 +124,24 @@ async function incrementReviewCount() {
  */
 async function getRepoStats(repoId) {
   try {
-    const repo = await ConnectedRepo.findById(repoId);
-    if (!repo) return null;
-
-    const reviews = await PullRequestReview.find({ githubRepoId: repo.githubRepoId })
-      .sort({ createdAt: 1 })
-      .lean();
-
-    if (!reviews.length) {
+    const stats = await RepoStats.findOne({ repoId }).lean();
+    if (!stats) {
       return {
-        totalReviews: 0,
-        totalComments: 0,
-        averageCommentsPerReview: 0,
-        lastReview: null
+        totalPRsReviewed: 0,
+        totalInlineComments: 0,
+        totalIssuesTriaged: 0,
+        totalLabelsApplied: 0,
+        totalErrors: 0,
+        lastActivityAt: null,
       };
     }
-
-    const totalComments = reviews.reduce((sum, r) => sum + (r.commentsPosted || 0), 0);
-
     return {
-      totalReviews: reviews.length,
-      totalComments,
-      averageCommentsPerReview: totalComments / reviews.length,
-      lastReview: reviews[reviews.length - 1]?.createdAt
+      totalPRsReviewed: stats.totalPRsReviewed || 0,
+      totalInlineComments: stats.totalInlineComments || 0,
+      totalIssuesTriaged: stats.totalIssuesTriaged || 0,
+      totalLabelsApplied: stats.totalLabelsApplied || 0,
+      totalErrors: stats.totalErrors || 0,
+      lastActivityAt: stats.lastActivityAt || null,
     };
   } catch (error) {
     console.error("❌ Failed to get repo stats:", error.message);
@@ -145,7 +160,7 @@ async function getRepoStats(repoId) {
  * @param {Object} params.user - User object
  * @returns {Promise<void>}
  */
-async function recordError({ owner, repo, githubRepoId, pull_number, error, user }) {
+async function recordError({ owner, repo, githubRepoId, pull_number, error, user, repoId }) {
   try {
     await ErrorLog.create({
       owner,
@@ -158,9 +173,60 @@ async function recordError({ owner, repo, githubRepoId, pull_number, error, user
       createdAt: new Date()
     });
 
+    // Update aggregated errors
+    if (repoId) {
+      await RepoStats.findOneAndUpdate(
+        { repoId },
+        {
+          $setOnInsert: { repoId, githubRepoId, userId: user?._id },
+          $inc: { totalErrors: 1 },
+          $set: { lastErrorAt: new Date(), lastActivityAt: new Date() },
+        },
+        { upsert: true }
+      );
+    }
+
     console.log(`✅ Recorded error for PR ${owner}/${repo}#${pull_number}`);
   } catch (err) {
     console.error("❌ Failed to record error:", err.message);
+  }
+}
+
+/**
+ * Records issue triage and updates aggregated stats
+ */
+async function recordIssueTriage({ owner, repo, githubRepoId, issue_number, user, labelsApplied = [], summary = "", repoId }) {
+  try {
+    await IssueTriage.create({
+      owner,
+      repo,
+      githubRepoId,
+      issue_number,
+      userId: user._id,
+      repoId,
+      labelsApplied,
+      summary,
+    });
+
+    await RepoStats.findOneAndUpdate(
+      { repoId },
+      {
+        $setOnInsert: { repoId, githubRepoId, userId: user._id },
+        $inc: {
+          totalIssuesTriaged: 1,
+          totalLabelsApplied: Array.isArray(labelsApplied) ? labelsApplied.length : 0,
+        },
+        $set: {
+          lastIssueTriagedAt: new Date(),
+          lastActivityAt: new Date(),
+        },
+      },
+      { upsert: true }
+    );
+
+    console.log(`✅ Recorded issue triage: ${owner}/${repo}#${issue_number}`);
+  } catch (error) {
+    console.error("❌ Failed to record issue triage:", error.message);
   }
 }
 
@@ -168,5 +234,6 @@ module.exports = {
   recordReview,
   incrementReviewCount,
   getRepoStats,
-  recordError
+  recordError,
+  recordIssueTriage
 };

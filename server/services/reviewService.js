@@ -84,7 +84,7 @@ async function orchestrateReview(payload, connectedRepo) {
 
     // Step 4: Prepare review for GitHub
 
-    const reviewEvent = analysis.inlineComments.length > 0 ? "COMMENT" : "COMMENT";
+    const reviewEvent = analysis.inlineComments.length > 0 ? "REQUEST_CHANGES" : "COMMENT";
 
     const review = {
       body: reviewBody,

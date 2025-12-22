@@ -221,4 +221,134 @@ async function generatePRTextSummary({ owner, repo, pull_number, totalFilesChang
   }
 }
 
-module.exports = { callMyAI, getAIReviewForFile, generatePRTextSummary };
+/**
+ * Analyzes a parsed diff and returns structured review data
+ * 
+ * @param {Array} parsedFiles - Array of parsed file objects from parse-diff
+ * @returns {Promise<Object>} Structured analysis with inlineComments, summary, confidence
+ */
+async function analyzeDiff(parsedFiles) {
+  const filesAnalyzed = [];
+  const inlineComments = [];
+
+  for (const file of parsedFiles) {
+    if (!file.to) continue; // Skip deleted files
+
+    filesAnalyzed.push(file.to);
+
+    // Format diff with line numbers
+    let diffForAI = `File: ${file.to}\n`;
+    let currentLineNumber = 0;
+
+    for (const chunk of file.chunks) {
+      diffForAI += "...\n";
+      if (chunk.newStart) {
+        currentLineNumber = chunk.newStart;
+      }
+
+      for (const change of chunk.changes) {
+        if (change.type === 'add') {
+          const lineNum = change.ln || currentLineNumber || 1;
+          diffForAI += `L${lineNum}: ${change.content}\n`;
+          if (!change.ln && currentLineNumber) {
+            currentLineNumber++;
+          } else if (change.ln) {
+            currentLineNumber = change.ln + 1;
+          }
+        } else if (change.type === 'normal') {
+          if (change.ln2) {
+            currentLineNumber = change.ln2 + 1;
+          } else if (currentLineNumber) {
+            currentLineNumber++;
+          }
+        }
+      }
+    }
+
+    // Create prompt for AI review
+    const prompt = `
+      You are a senior code reviewer with expertise in software development best practices, security, and performance optimization.
+      
+      **TASK**: Review the code changes in the file: \`${file.to}\`
+      
+      **CONTEXT**: 
+      - Only added lines (prefixed with line numbers like "L15: ...") should be reviewed
+      - Context lines (unchanged) and deleted lines (-) are shown for reference only
+      - Focus on: bugs, security vulnerabilities, performance issues, code quality, best practices, and potential improvements
+      
+      **REVIEW CRITERIA**:
+      1. **Security**: Check for vulnerabilities (injection flaws, exposed secrets, insecure dependencies)
+      2. **Bugs**: Identify potential runtime errors, edge cases, or logical issues
+      3. **Performance**: Flag inefficient algorithms, memory leaks, or unnecessary operations
+      4. **Code Quality**: Check for readability, maintainability, proper naming conventions
+      5. **Best Practices**: Ensure adherence to language-specific standards and patterns
+      6. **Error Handling**: Verify proper error handling and edge case management
+      
+      **OUTPUT FORMAT** - Respond ONLY with a valid JSON array:
+      [
+        { "line": <line_number>, "comment": "<category>: <clear_concise_feedback>" }
+      ]
+      
+      **CRITICAL RULES**:
+      1. ONLY comment on lines with a line number prefix (e.g., "L15: ...")
+      2. The "line" value MUST be a NUMBER matching the line number from the diff (e.g., 15, not "L15")
+      3. Each comment MUST start with a category prefix: [Security], [Bug], [Performance], [Quality], [Best Practice], or [Error Handling]
+      4. Comments should be specific, actionable, and concise (1-2 sentences)
+      5. If NO issues found in added lines, return an empty array: []
+      6. Do NOT include markdown code blocks in your response, ONLY the JSON array
+      
+      **EXAMPLES**:
+      Good: [{"line": 15, "comment": "[Security]: Potential SQL injection vulnerability. Use parameterized queries instead of string concatenation."}]
+      Good: [{"line": 22, "comment": "[Performance]: Array.find() inside a loop causes O(n²) complexity. Consider using a Map for O(n) lookup."}]
+      Bad: [{"line": "L15", "comment": "issue here"}] // Line must be a number, comment lacks category and detail
+      
+      **CODE CHANGES**:
+      \`\`\`diff
+      ${diffForAI}
+      \`\`\`
+      
+      Remember: Respond ONLY with the JSON array. No explanations, no markdown formatting, just the raw JSON.`;
+
+    // Get AI review for this file
+    const fileComments = await getAIReviewForFile(prompt);
+
+    // Format comments for GitHub API
+    if (fileComments && fileComments.length > 0) {
+      for (const item of fileComments) {
+        if (item.line && item.comment) {
+          const lineNumber = parseInt(String(item.line).replace(/\D/g, ''), 10);
+          if (!isNaN(lineNumber)) {
+            inlineComments.push({
+              path: file.to,
+              position: lineNumber,
+              body: item.comment
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Calculate summary and confidence
+  const summary = inlineComments.length === 0
+    ? `Analyzed ${filesAnalyzed.length} file(s). No issues detected.`
+    : `Analyzed ${filesAnalyzed.length} file(s). Found ${inlineComments.length} suggestion(s).`;
+
+  const confidence = inlineComments.length === 0 ? 'high' : 
+                   inlineComments.length < 5 ? 'high' : 
+                   inlineComments.length < 15 ? 'medium' : 'low';
+
+  return {
+    filesAnalyzed,
+    totalFilesReviewed: filesAnalyzed.length,
+    inlineComments,
+    summary,
+    confidence,
+    stats: {
+      totalComments: inlineComments.length,
+      totalFiles: filesAnalyzed.length
+    }
+  };
+}
+
+module.exports = { callMyAI, getAIReviewForFile, generatePRTextSummary, analyzeDiff };

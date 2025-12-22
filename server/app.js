@@ -18,14 +18,18 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
 app.use(morgan("dev"));
 app.use(cors({ origin: FRONTEND_URL, credentials: true }));
-app.use(express.json());
 app.use(cookieParser());
 app.use(passport.initialize());
+
+// Webhooks need raw body for signature verification; register before express.json
+app.use("/webhooks", webhookRoutes);
+
+// JSON parsing for the rest of the API
+app.use(express.json());
 
 app.use("/api/auth", authRoutes);
 app.use("/api/test", testRoutes);
 app.use("/api/github", githubRoutes);
 app.use("/api/repos", repoRoutes);
-app.use("/webhooks", webhookRoutes);
 
 module.exports = app;

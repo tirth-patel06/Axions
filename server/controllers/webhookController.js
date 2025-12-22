@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const ConnectedRepo = require("../models/ConnectedRepo");
-const { runReview } = require("../services/reviewService");
+const { orchestrateReview } = require("../services/reviewService");
 
 async function githubWebhookHandler(req, res) {
   try {
@@ -60,7 +60,7 @@ async function githubWebhookHandler(req, res) {
     if (event === "pull_request") {
       // Handle both opened and synchronize (new commits) events
       if (payload.action === "opened" || payload.action === "synchronize") {
-        await runReview(payload, connectedRepo);
+        await orchestrateReview(payload, connectedRepo);
       }
     }
 

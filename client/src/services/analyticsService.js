@@ -86,3 +86,33 @@ export const getErrorTrends = async () => {
     throw error;
   }
 };
+
+/**
+ * Get comment density for a repository
+ * @param {string} repoName - Repository name
+ * @returns {Promise<Object>} Comment density data
+ */
+export const getCommentDensity = async (repoName) => {
+  try {
+    const response = await api.get(`/api/analytics/repo/${encodeURIComponent(repoName)}/density`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching comment density:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get confidence distribution for a repository
+ * @param {string} repoName - Repository name
+ * @returns {Promise<Object>} Confidence distribution data
+ */
+export const getConfidenceDistribution = async (repoName) => {
+  try {
+    const response = await api.get(`/api/analytics/repo/${encodeURIComponent(repoName)}/confidence`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching confidence distribution:', error);
+    throw error;
+  }
+};

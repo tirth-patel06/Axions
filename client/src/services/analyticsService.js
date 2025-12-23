@@ -75,11 +75,13 @@ export const getActivityHeatmap = async () => {
 
 /**
  * Get error trends
+ * @param {Object} params - Query parameters (days)
  * @returns {Promise<Array>} Error trends data
  */
-export const getErrorTrends = async () => {
+export const getErrorTrends = async (params = {}) => {
   try {
-    const response = await api.get('/api/analytics/errors/trends');
+    const queryString = new URLSearchParams(params).toString();
+    const response = await api.get(`/api/analytics/errors/trends?${queryString}`);
     return response.data;
   } catch (error) {
     console.error('Error fetching error trends:', error);

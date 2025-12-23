@@ -12,6 +12,7 @@ const testRoutes = require("./routes/test");
 const githubRoutes = require("./routes/github");
 const repoRoutes = require("./routes/repos");
 const webhookRoutes = require("./routes/webhooks");
+const analyticsRoutes = require("./routes/analytics");
 
 const app = express();
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
@@ -31,5 +32,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/test", testRoutes);
 app.use("/api/github", githubRoutes);
 app.use("/api/repos", repoRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 module.exports = app;

@@ -117,8 +117,34 @@ async function getConnectedRepos(req, res) {
       isConnected: true,
     }).select('githubRepoId owner name fullName isPrivate connectedAt');
 
+    // Fetch aggregated stats for all repos
+    const repoIds = connectedRepos.map(r => r._id);
+    const RepoStats = require('../models/RepoStats');
+    const statsDocs = await RepoStats.find({ repoId: { $in: repoIds } }).lean();
+    const statsMap = new Map(statsDocs.map(s => [String(s.repoId), s]));
+
+    // Attach stats slice per repo (as requested)
+    const reposWithStats = connectedRepos.map(r => {
+      const s = statsMap.get(String(r._id));
+      return {
+        id: r._id,
+        githubRepoId: r.githubRepoId,
+        owner: r.owner,
+        name: r.name,
+        fullName: r.fullName,
+        private: r.isPrivate,
+        connectedAt: r.connectedAt,
+        stats: {
+          totalPRsReviewed: s?.totalPRsReviewed || 0,
+          totalIssuesTriaged: s?.totalIssuesTriaged || 0,
+          totalInlineComments: s?.totalInlineComments || 0,
+          lastActivityAt: s?.lastActivityAt || null,
+        },
+      };
+    });
+
     return res.json({
-      repos: connectedRepos,
+      repos: reposWithStats,
     });
   } catch (err) {
     console.error('Get connected repos error:', err);
@@ -128,7 +154,74 @@ async function getConnectedRepos(req, res) {
   }
 }
 
+/*DELETE /api/repos/:repoId/disconnect*/
+async function disconnectRepo(req, res) {
+  const session = await ConnectedRepo.startSession();
+  session.startTransaction();
+
+  try {
+    const user = req.user;
+    const { repoId } = req.params;
+
+    // Find repo (must belong to current user)
+    const connectedRepo = await ConnectedRepo.findOne({
+      _id: repoId,
+      userId: user._id,
+      isConnected: true,
+    }).session(session);
+
+    if (!connectedRepo) {
+      return res.status(404).json({
+        error: 'Repository not found or already disconnected',
+      });
+    }
+
+    // Delete webhook from GitHub
+    const octokit = new Octokit({ auth: user.accessToken });
+    try {
+      await octokit.rest.repos.deleteWebhook({
+        owner: connectedRepo.owner,
+        repo: connectedRepo.name,
+        hook_id: connectedRepo.webhookId,
+      });
+      console.log(`✅ Webhook deleted for ${connectedRepo.fullName}`);
+    } catch (webhookErr) {
+      // Log but don't fail - webhook might already be deleted
+      console.warn(
+        `⚠️  Failed to delete webhook for ${connectedRepo.fullName}:`,
+        webhookErr.message
+      );
+    }
+
+    // Mark as disconnected in DB
+    connectedRepo.isConnected = false;
+    connectedRepo.webhookSecret = null;
+    connectedRepo.webhookId = null;
+    await connectedRepo.save({ session });
+
+    await session.commitTransaction();
+
+    return res.json({
+      message: 'Repository disconnected successfully',
+      repo: {
+        fullName: connectedRepo.fullName,
+        isConnected: false,
+      },
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error('Disconnect repo error:', err);
+
+    return res.status(500).json({
+      error: 'Failed to disconnect repository',
+    });
+  } finally {
+    session.endSession();
+  }
+}
+
 module.exports = {
   connectRepo,
   getConnectedRepos,
+  disconnectRepo,
 };

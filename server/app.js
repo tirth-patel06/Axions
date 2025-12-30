@@ -13,12 +13,26 @@ const githubRoutes = require("./routes/github");
 const repoRoutes = require("./routes/repos");
 const webhookRoutes = require("./routes/webhooks");
 const analyticsRoutes = require("./routes/analytics");
+const issuesRoutes = require("./routes/issues");
 
 const app = express();
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
-app.use(morgan("dev"));
-app.use(cors({ origin: FRONTEND_URL, credentials: true }));
+// ============================================
+// Environment Variables with Defaults
+// ============================================
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const CORS_CREDENTIALS = process.env.CORS_CREDENTIALS === "true";
+const LOG_LEVEL = process.env.LOG_LEVEL || "dev";
+const NODE_ENV = process.env.NODE_ENV || "development";
+
+// ============================================
+// Middleware Configuration
+// ============================================
+app.use(morgan(LOG_LEVEL));
+app.use(cors({ 
+  origin: FRONTEND_URL, 
+  credentials: CORS_CREDENTIALS 
+}));
 app.use(cookieParser());
 app.use(passport.initialize());
 
@@ -28,10 +42,42 @@ app.use("/webhooks", webhookRoutes);
 // JSON parsing for the rest of the API
 app.use(express.json());
 
+// ============================================
+// Routes
+// ============================================
 app.use("/api/auth", authRoutes);
 app.use("/api/test", testRoutes);
 app.use("/api/github", githubRoutes);
 app.use("/api/repos", repoRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/issues", issuesRoutes);
+
+// ============================================
+// Health Check Endpoint
+// ============================================
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
+    environment: NODE_ENV,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ============================================
+// Error Handling Middleware
+// ============================================
+app.use((err, req, res, next) => {
+  const statusCode = err.statusCode || 500;
+  const message = err.message || "Internal Server Error";
+  
+  if (process.env.SHOW_DETAILED_ERRORS === "true") {
+    console.error("Error Details:", err);
+  }
+  
+  res.status(statusCode).json({
+    error: message,
+    ...(process.env.SHOW_DETAILED_ERRORS === "true" && { details: err.stack }),
+  });
+});
 
 module.exports = app;

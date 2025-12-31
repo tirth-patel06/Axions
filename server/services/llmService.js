@@ -4,7 +4,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 // 1. AUTHENTICATE AI CLIENT
 // -------------------------------------------------
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const aiModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+const aiModel = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.5-flash-lite" });
 
 // -------------------------------------------------
 // 2. AI CALLER FUNCTIONS
@@ -369,4 +369,122 @@ async function analyzeDiff(parsedFiles) {
   };
 }
 
-module.exports = { callMyAI, getAIReviewForFile, generatePRTextSummary, analyzeDiff };
+/**
+ * Generates issue labels based on title and description using LLM
+ * 
+ * @param {string} title - Issue title
+ * @param {string} description - Issue description/body
+ * @returns {Promise<Array>} Array of label strings
+ */
+async function generateIssueLabels(title, description) {
+  try {
+    const prompt = `You are an expert GitHub issue triage assistant. Analyze the following GitHub issue and suggest appropriate labels.
+
+ISSUE TITLE: "${title}"
+
+ISSUE DESCRIPTION: 
+${description || '(No description provided)'}
+
+Based on the title and description, generate a JSON array of relevant GitHub labels. Consider these categories:
+- Type: bug, feature, enhancement, documentation, refactor, performance, security
+- Priority: critical, high, medium, low
+- Status: help-wanted, blocked, wontfix, duplicate, invalid
+- Area: frontend, backend, api, database, devops, testing, deployment
+- Framework/Library specific labels if applicable
+
+Return ONLY a valid JSON array of label strings (lowercase, without spaces, using hyphens). Example format:
+["bug", "critical", "backend"]
+
+CRITICAL RULES:
+1. Return ONLY the JSON array, nothing else
+2. Use kebab-case for labels (lowercase with hyphens)
+3. Maximum 5-7 labels per issue
+4. Only include labels that are clearly justified by the issue content
+5. No markdown, no explanations, just the JSON array`;
+
+    const aiResponse = await callMyAI(prompt);
+    
+    // Parse the response
+    let labels = [];
+    try {
+      // Try to extract JSON from the response
+      const jsonMatch = aiResponse.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        labels = JSON.parse(jsonMatch[0]);
+      } else {
+        labels = JSON.parse(aiResponse);
+      }
+
+      // Validate that it's an array of strings
+      if (!Array.isArray(labels)) {
+        console.warn('AI response was not an array, returning empty labels');
+        return [];
+      }
+
+      // Filter to ensure all are strings and valid GitHub label format
+      labels = labels
+        .filter(label => typeof label === 'string' && label.trim().length > 0)
+        .map(label => label.trim().toLowerCase())
+        .slice(0, 7); // Limit to 7 labels
+
+      console.log(`✅ Generated ${labels.length} labels for issue: ${title}`);
+      return labels;
+    } catch (parseError) {
+      console.error('Failed to parse AI response for labels:', parseError.message);
+      return [];
+    }
+  } catch (error) {
+    console.error('Error generating issue labels:', error);
+    return [];
+  }
+}
+
+/**
+ * Generates a concise AI summary for a GitHub issue (max 2 lines)
+ * 
+ * @param {string} title - Issue title
+ * @param {string} description - Issue description/body
+ * @returns {Promise<string>} AI-generated 2-line summary
+ */
+async function generateIssueSummary(title, description) {
+  try {
+    const prompt = `You are a GitHub issue analyst. Create a VERY CONCISE summary in exactly 2 lines or less.
+
+ISSUE TITLE: "${title}"
+ISSUE DESCRIPTION: ${description || '(No description)'}
+
+Respond with ONLY 2 lines maximum:
+- Line 1: Problem/Request in 1 sentence
+- Line 2: Impact or Action needed in 1 sentence
+
+No markdown, no formatting, just plain text.`;
+
+    console.log(`\n📝 Generating summary for issue: "${title}"`);
+    const aiResponse = await callMyAI(prompt);
+    
+    if (!aiResponse || aiResponse === '[]') {
+      console.warn('AI response was empty, generating default summary');
+      return generateDefaultSummary(title, description);
+    }
+
+    console.log(`✅ Summary generated successfully`);
+    return aiResponse.trim();
+  } catch (error) {
+    console.error('❌ Error generating issue summary:', error);
+    return generateDefaultSummary(title, description);
+  }
+}
+
+/**
+ * Generates a short 2-line default summary if AI fails
+ * 
+ * @param {string} title - Issue title
+ * @param {string} description - Issue description/body
+ * @returns {string} Default summary
+ */
+function generateDefaultSummary(title, description) {
+  const desc = description ? description.substring(0, 100) : 'Issue needs review';
+  return `• ${title}\n• ${desc}${desc.length === 100 ? '...' : ''}`;
+}
+
+module.exports = { callMyAI, getAIReviewForFile, generatePRTextSummary, analyzeDiff, generateIssueLabels, generateIssueSummary };

@@ -14,13 +14,19 @@ function githubCallback(req, res) {
       return res.status(500).json({ error: "JWT_SECRET not configured" });
     }
 
-    const token = jwt.sign({ userId: user._id }, secret, { expiresIn: "7d" });
+    const jwtExpiry = process.env.JWT_EXPIRY || "7d";
+    const token = jwt.sign({ userId: user._id }, secret, { expiresIn: jwtExpiry });
+    
     // set JWT in secure, httpOnly cookie
+    const cookieMaxAge = process.env.COOKIE_MAX_AGE || "24h";
+    // Convert to milliseconds if needed (simple conversion: assume default is 7 days)
+    const maxAgeMs = 7 * 24 * 60 * 60 * 1000;
+    
     res.cookie("jwt", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: maxAgeMs,
     });
 
     const successUrl = `${process.env.FRONTEND_URL}/auth/success`;

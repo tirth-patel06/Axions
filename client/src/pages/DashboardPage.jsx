@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { GitBranch, AlertCircle, Code2, Sparkles, ArrowRight, Globe, Lock, Loader2 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { api } from '../lib/api';
@@ -179,10 +180,10 @@ export default function DashboardPage() {
                     <GitBranch className="w-5 h-5 text-white" />
                     Recent Activity
                   </h2>
-                  <a href="/repositories" className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1">
+                  <Link to="/repositories" className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1">
                     View all
                     <ArrowRight className="w-4 h-4" />
-                  </a>
+                  </Link>
                 </div>
                 <div className="space-y-3">
                   {recentPRs.length > 0 ? (
@@ -208,9 +209,9 @@ export default function DashboardPage() {
                     <Code2 className="w-5 h-5 text-white" />
                     Your Repositories
                   </h2>
-                  <a href="/repositories" className="text-sm text-gray-400 hover:text-white transition-colors">
+                  <Link to="/repositories" className="text-sm text-gray-400 hover:text-white transition-colors">
                     <ArrowRight className="w-4 h-4" />
-                  </a>
+                  </Link>
                 </div>
                 <div className="space-y-3">
                   {repositories.length > 0 ? (
@@ -223,9 +224,9 @@ export default function DashboardPage() {
                     <div className="text-center py-8 text-gray-400">
                       <Code2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
                       <p>No repositories connected</p>
-                      <a href="/repositories" className="text-sm text-white hover:underline mt-2 inline-block">
+                      <Link to="/repositories" className="text-sm text-white hover:underline mt-2 inline-block">
                         Connect your first repo
-                      </a>
+                      </Link>
                     </div>
                   )}
                 </div>

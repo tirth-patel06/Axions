@@ -8,7 +8,10 @@ const {
   getCommentDensity,
   getConfidenceDistribution,
   getErrorTrends,
-  getActivityHeatmap
+  getActivityHeatmap,
+  getIssueTriageTimeSeries,
+  getIssueTriageAnalysis,
+  getLabelDistribution
 } = require("../controllers/analyticsController");
 
 const router = express.Router();
@@ -34,5 +37,10 @@ router.get("/errors/trends", auth, getErrorTrends);
 
 // Activity heatmap
 router.get("/heatmap", auth, getActivityHeatmap);
+
+// Issue triage analytics
+router.get("/issues/timeseries", auth, getIssueTriageTimeSeries);
+router.get("/repo/:repoId/issues", auth, getIssueTriageAnalysis);
+router.get("/repo/:repoId/labels", auth, getLabelDistribution);
 
 module.exports = router;

@@ -186,9 +186,9 @@ export default function DashboardPage() {
             <div className="space-y-6">
               <div className="bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 p-6 hover:border-white/20 hover:shadow-[0_8_32px_rgba(255,255,255,0.1)] transition-all duration-300 animate-fadeInUp animation-delay-400">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                  <h2 className="text-l font-bold text-white flex items-center gap-3">
                     <Code2 className="w-5 h-5 text-white" />
-                    Your Repositories
+                    Your Connected Repositories
                   </h2>
                   <Link to="/repositories" className="text-sm text-gray-400 hover:text-white transition-colors">
                     <ArrowRight className="w-4 h-4" />

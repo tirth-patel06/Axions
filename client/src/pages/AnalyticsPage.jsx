@@ -15,27 +15,65 @@ export default function AnalyticsPage() {
   const SimpleChart = ({ chartData }) => {
     if (!chartData || chartData.length === 0) return null;
     
-    const maxCount = Math.max(...chartData.map(d => d.reviewCount || 0), 1);
+    // Group data by week
+    const getWeeklyData = () => {
+      const weeks = new Map();
+      
+      chartData.forEach(day => {
+        const date = new Date(day.date);
+        // Get the Monday of the week
+        const dayOfWeek = date.getDay();
+        const diff = date.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        const monday = new Date(date.setDate(diff));
+        const weekKey = monday.toISOString().split('T')[0];
+        
+        if (!weeks.has(weekKey)) {
+          weeks.set(weekKey, {
+            weekStart: weekKey,
+            reviewCount: 0,
+            commentCount: 0
+          });
+        }
+        
+        const week = weeks.get(weekKey);
+        week.reviewCount += day.reviewCount || 0;
+        week.commentCount += day.commentCount || 0;
+      });
+      
+      return Array.from(weeks.values()).sort((a, b) => 
+        new Date(a.weekStart) - new Date(b.weekStart)
+      );
+    };
+    
+    const weeklyData = getWeeklyData();
+    const maxCount = Math.max(...weeklyData.map(w => w.reviewCount), 1);
 
     return (
-      <div className="flex items-end gap-1 h-48 justify-center">
-        {chartData.slice(-30).map((point, idx) => (
-          <div
-            key={idx}
-            className="flex-1 flex flex-col items-center group cursor-pointer"
-          >
+      <div className="flex items-end gap-3 h-64 px-4">
+        {weeklyData.map((week, idx) => {
+          const heightPx = (week.reviewCount / maxCount) * 200; // Use pixel height for reliable rendering
+          const date = new Date(week.weekStart);
+          const weekLabel = `${date.getDate()} ${date.toLocaleDateString('en-US', { month: 'short' })}`;
+          
+          return (
             <div
-              className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t hover:from-blue-400 hover:to-blue-300 transition-all duration-300"
-              style={{ height: `${(point.reviewCount / maxCount) * 100}%` }}
-              title={`${point.date}: ${point.reviewCount} PRs, ${point.commentCount} comments`}
-            />
-            {idx % 5 === 0 && (
-              <span className="text-xs text-gray-500 mt-2 w-full text-center">
-                {point.date?.slice(-5) || ''}
+              key={idx}
+              className="flex-1 flex flex-col items-center group cursor-pointer"
+            >
+              <div
+                className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t hover:from-blue-400 hover:to-blue-300 transition-all duration-300 relative"
+                style={{ height: `${heightPx}px` }}
+              >
+                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/90 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  {week.reviewCount} PRs
+                </div>
+              </div>
+              <span className="text-xs text-gray-400 mt-2 text-center">
+                {weekLabel}
               </span>
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
     );
   };

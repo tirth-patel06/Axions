@@ -5,6 +5,7 @@ const { generateIssueLabels, generateIssueSummary } = require("../services/llmSe
 const { applyColoredLabels, postIssueSummaryComment } = require("../services/githubService");
 const IssueTriage = require("../models/IssueTriage");
 const { Octokit } = require("@octokit/rest");
+const statsService = require("../services/statsService");
 
 /**
  * Orchestrates the issue labeling and summarization process
@@ -64,6 +65,23 @@ async function orchestrateIssueLabeling(payload, connectedRepo) {
     return issueTriage;
   } catch (error) {
     console.error("❌ Error in issue labeling orchestration:", error);
+    
+    // Record error to database for tracking
+    const {
+      issue: { number: issue_number },
+      repository: { owner: { login: owner }, name: repo },
+    } = payload;
+    
+    await statsService.recordError({
+      owner,
+      repo,
+      githubRepoId: connectedRepo.githubRepoId,
+      pull_number: issue_number, // Using pull_number field for issue number
+      error,
+      user: connectedRepo.userId,
+      repoId: connectedRepo._id
+    });
+    
     throw error;
   }
 }

@@ -410,7 +410,7 @@ async function getErrorRateTrends({ userId, days = 30 }) {
 }
 
 /**
- * Rebuild repo stats from actual pull request reviews (data sync)
+ * Rebuild repo stats from actual pull request reviews and issue triages (data sync)
  * Call this when stats are out of sync
  * @param {string} userId - User MongoDB ObjectId
  */
@@ -421,18 +421,44 @@ async function rebuildRepoStats({ userId }) {
       .select('repoId commentsPosted')
       .lean();
 
+    // Get all issue triages grouped by repoId
+    const triages = await IssueTriage.find({ userId })
+      .select('repoId labelsApplied')
+      .lean();
+
     const statsMap = new Map();
+    
+    // Process PR reviews
     reviews.forEach(r => {
       if (!statsMap.has(r.repoId.toString())) {
         statsMap.set(r.repoId.toString(), {
           repoId: r.repoId,
           totalPRsReviewed: 0,
-          totalInlineComments: 0
+          totalInlineComments: 0,
+          totalIssuesTriaged: 0,
+          totalLabelsApplied: 0
         });
       }
       const stat = statsMap.get(r.repoId.toString());
       stat.totalPRsReviewed++;
       stat.totalInlineComments += r.commentsPosted || 0;
+    });
+
+    // Process issue triages
+    triages.forEach(t => {
+      const repoIdStr = t.repoId.toString();
+      if (!statsMap.has(repoIdStr)) {
+        statsMap.set(repoIdStr, {
+          repoId: t.repoId,
+          totalPRsReviewed: 0,
+          totalInlineComments: 0,
+          totalIssuesTriaged: 0,
+          totalLabelsApplied: 0
+        });
+      }
+      const stat = statsMap.get(repoIdStr);
+      stat.totalIssuesTriaged++;
+      stat.totalLabelsApplied += Array.isArray(t.labelsApplied) ? t.labelsApplied.length : 0;
     });
 
     // Bulk update all RepoStats
@@ -443,6 +469,8 @@ async function rebuildRepoStats({ userId }) {
           $set: {
             totalPRsReviewed: stat.totalPRsReviewed,
             totalInlineComments: stat.totalInlineComments,
+            totalIssuesTriaged: stat.totalIssuesTriaged,
+            totalLabelsApplied: stat.totalLabelsApplied,
             lastActivityAt: new Date()
           }
         },
@@ -450,7 +478,7 @@ async function rebuildRepoStats({ userId }) {
       );
     }
 
-    console.log(`✅ Rebuilt stats for ${statsMap.size} repos`);
+    console.log(`✅ Rebuilt stats for ${statsMap.size} repos (PRs + Issue Triages)`);
     return statsMap.size;
   } catch (error) {
     console.error("❌ Failed to rebuild repo stats:", error.message);
@@ -548,6 +576,123 @@ async function getConfidenceDistribution({ repoId }) {
   }
 }
 
+/**
+ * Get issue triage time series (for graphs)
+ * @param {string} userId - User MongoDB ObjectId
+ * @param {string} repoId - Optional repo filter
+ * @param {number} days - Number of days to look back (default 30)
+ * @returns {Promise<Array>} Daily triage data: [{ date, triageCount, labelsCount }]
+ */
+async function getIssueTriageTimeSeries({ userId, repoId = null, days = 30 }) {
+  try {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const query = { userId, createdAt: { $gte: startDate } };
+    if (repoId) query.repoId = repoId;
+
+    const triages = await IssueTriage.find(query)
+      .select('createdAt labelsApplied')
+      .sort({ createdAt: 1 })
+      .lean();
+
+    // Group by date
+    const dailyMap = new Map();
+    triages.forEach(t => {
+      const dateKey = t.createdAt.toISOString().split('T')[0];
+      if (!dailyMap.has(dateKey)) {
+        dailyMap.set(dateKey, { date: dateKey, triageCount: 0, labelsCount: 0 });
+      }
+      const day = dailyMap.get(dateKey);
+      day.triageCount++;
+      day.labelsCount += Array.isArray(t.labelsApplied) ? t.labelsApplied.length : 0;
+    });
+
+    return Array.from(dailyMap.values());
+  } catch (error) {
+    console.error("❌ Failed to get issue triage time series:", error.message);
+    return [];
+  }
+}
+
+/**
+ * Get issue triage analysis for a repo
+ * @param {string} repoId - Repository MongoDB ObjectId
+ * @returns {Promise<Object>} Triage metrics
+ */
+async function getIssueTriageAnalysis({ repoId }) {
+  try {
+    const triages = await IssueTriage.find({ repoId })
+      .select('issue_number labelsApplied summary createdAt')
+      .lean();
+
+    if (!triages.length) {
+      return {
+        totalIssuesTriaged: 0,
+        totalLabelsApplied: 0,
+        avgLabelsPerIssue: 0,
+        recentTriages: []
+      };
+    }
+
+    const totalLabels = triages.reduce((sum, t) => sum + (Array.isArray(t.labelsApplied) ? t.labelsApplied.length : 0), 0);
+    const recentTriages = triages
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 5)
+      .map(t => ({
+        issueNumber: t.issue_number,
+        labelsApplied: t.labelsApplied,
+        summary: t.summary,
+        createdAt: t.createdAt
+      }));
+
+    return {
+      totalIssuesTriaged: triages.length,
+      totalLabelsApplied: totalLabels,
+      avgLabelsPerIssue: (totalLabels / triages.length).toFixed(2),
+      recentTriages
+    };
+  } catch (error) {
+    console.error("❌ Failed to get issue triage analysis:", error.message);
+    return null;
+  }
+}
+
+/**
+ * Get label distribution across triaged issues
+ * @param {string} repoId - Repository MongoDB ObjectId
+ * @returns {Promise<Object>} Label usage breakdown
+ */
+async function getLabelDistribution({ repoId }) {
+  try {
+    const triages = await IssueTriage.find({ repoId })
+      .select('labelsApplied')
+      .lean();
+
+    const labelCounts = {};
+    triages.forEach(t => {
+      if (Array.isArray(t.labelsApplied)) {
+        t.labelsApplied.forEach(label => {
+          labelCounts[label] = (labelCounts[label] || 0) + 1;
+        });
+      }
+    });
+
+    // Sort by count descending
+    const sorted = Object.entries(labelCounts)
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      totalLabels: Object.keys(labelCounts).length,
+      distribution: sorted
+    };
+  } catch (error) {
+    console.error("❌ Failed to get label distribution:", error.message);
+    return null;
+  }
+}
+
 module.exports = {
   recordReview,
   incrementReviewCount,
@@ -563,5 +708,9 @@ module.exports = {
   getErrorRateTrends,
   getRepoComparison,
   getActivityHeatmap,
-  getConfidenceDistribution
+  getConfidenceDistribution,
+  // Issue triage analytics
+  getIssueTriageTimeSeries,
+  getIssueTriageAnalysis,
+  getLabelDistribution
 };

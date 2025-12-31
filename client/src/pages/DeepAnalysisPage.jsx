@@ -1,117 +1,66 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Zap, AlertCircle, Activity } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
-import { getRepoComparison, getCommentDensity, getConfidenceDistribution } from '../services/analyticsService';
+import { useRepoComparison, useCommentDensity, useConfidenceDistribution } from '../hooks/useAnalyticsData';
 
-export default function DeepAnalysisPage() {
-  const [repos, setRepos] = useState([]);
-  const [selectedRepo, setSelectedRepo] = useState(null);
-  const [density, setDensity] = useState(null);
-  const [confidence, setConfidence] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [error, setError] = useState(null);
+const ConfidenceChart = ({ data }) => {
+  if (!data) return null;
+  
+  const total = (data.high || 0) + (data.medium || 0) + (data.low || 0);
+  if (total === 0) return null;
+  
+  const highPct = ((data.high || 0) / total) * 100;
+  const mediumPct = ((data.medium || 0) / total) * 100;
+  const lowPct = ((data.low || 0) / total) * 100;
 
-  useEffect(() => {
-    const fetchRepos = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await getRepoComparison();
-        setRepos(result || []);
-        if (result && result.length > 0) {
-          setSelectedRepo(result[0].repoName || result[0].name);
-        }
-      } catch (error) {
-        console.error('Failed to fetch repos:', error);
-        setError('Failed to load repositories.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchRepos();
-  }, []);
-
-  useEffect(() => {
-    if (!selectedRepo) return;
-
-    const fetchAnalysis = async () => {
-      try {
-        setAnalysisLoading(true);
-        setError(null);
-        const densityResult = await getCommentDensity(selectedRepo);
-        const confidenceResult = await getConfidenceDistribution(selectedRepo);
-        setDensity(densityResult);
-        setConfidence(confidenceResult);
-      } catch (error) {
-        console.error('Failed to fetch analysis:', error);
-        setError('Failed to load analysis data.');
-      } finally {
-        setAnalysisLoading(false);
-      }
-    };
-
-    fetchAnalysis();
-  }, [selectedRepo]);
-
-  const getActivityLevel = (level) => {
-    switch (level) {
-      case 'high':
-        return 'bg-red-500/20 text-red-200 border-red-500/30';
-      case 'medium':
-        return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/30';
-      case 'low':
-        return 'bg-green-500/20 text-green-200 border-green-500/30';
-      default:
-        return 'bg-white/10 text-gray-200 border-white/20';
-    }
-  };
-
-  const ConfidenceChart = ({ data }) => {
-    if (!data) return null;
-    
-    const total = data.high + data.medium + data.low;
-    if (total === 0) return null;
-    
-    const highPct = (data.high / total) * 100;
-    const mediumPct = (data.medium / total) * 100;
-    const lowPct = (data.low / total) * 100;
-
-    return (
-      <div className="space-y-4">
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-300 text-sm">High Confidence</span>
-            <span className="text-green-400 font-semibold">{data.high}</span>
-          </div>
-          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-green-500" style={{ width: `${highPct}%` }} />
-          </div>
+  return (
+    <div className="space-y-4">
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-gray-300 text-sm">High Confidence</span>
+          <span className="text-green-400 font-semibold">{data.high || 0}</span>
         </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-300 text-sm">Medium Confidence</span>
-            <span className="text-yellow-400 font-semibold">{data.medium}</span>
-          </div>
-          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-yellow-500" style={{ width: `${mediumPct}%` }} />
-          </div>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-300 text-sm">Low Confidence</span>
-            <span className="text-red-400 font-semibold">{data.low}</span>
-          </div>
-          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-red-500" style={{ width: `${lowPct}%` }} />
-          </div>
+        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+          <div className="h-full bg-green-500" style={{ width: `${highPct}%` }} />
         </div>
       </div>
-    );
-  };
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-gray-300 text-sm">Medium Confidence</span>
+          <span className="text-yellow-400 font-semibold">{data.medium || 0}</span>
+        </div>
+        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+          <div className="h-full bg-yellow-500" style={{ width: `${mediumPct}%` }} />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-gray-300 text-sm">Low Confidence</span>
+          <span className="text-red-400 font-semibold">{data.low || 0}</span>
+        </div>
+        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+          <div className="h-full bg-red-500" style={{ width: `${lowPct}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default function DeepAnalysisPage() {
+  const [selectedRepoId, setSelectedRepoId] = useState(null);
+  const { data: repos, loading } = useRepoComparison();
+  const { data: density, loading: densityLoading } = useCommentDensity(selectedRepoId);
+  const { data: confidence, loading: confidenceLoading } = useConfidenceDistribution(selectedRepoId);
+
+  // Set initial selectedRepoId when repos load
+  if (repos && repos.length > 0 && !selectedRepoId) {
+    setSelectedRepoId(repos[0].repoId);
+  }
+
+  const error = null;
+  const isAnalysisLoading = densityLoading || confidenceLoading;
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
@@ -141,18 +90,17 @@ export default function DeepAnalysisPage() {
                   <h3 className="text-white font-semibold mb-4">Select Repository</h3>
                   <div className="space-y-2">
                     {repos.map((repo) => {
-                      const repoName = repo.repoName || repo.name;
                       return (
                         <button
-                          key={repoName}
-                          onClick={() => setSelectedRepo(repoName)}
+                          key={repo.repoId}
+                          onClick={() => setSelectedRepoId(repo.repoId)}
                           className={`w-full text-left px-4 py-3 rounded-lg transition-all duration-300 border ${
-                            selectedRepo === repoName
+                            selectedRepoId === repo.repoId
                               ? 'bg-white/15 text-white border-white/30 shadow-[0_4_16px_rgba(255,255,255,0.1)]'
                               : 'bg-white/5 text-gray-400 border-white/10 hover:text-white hover:bg-white/10'
                           }`}
                         >
-                          {repoName}
+                          {repo.repo}
                         </button>
                       );
                     })}
@@ -161,7 +109,7 @@ export default function DeepAnalysisPage() {
               </div>
 
               <div className="lg:col-span-2 space-y-6">
-                {analysisLoading ? (
+                {isAnalysisLoading ? (
                   <div className="text-center py-12">
                     <p className="text-gray-400">Loading analysis data...</p>
                   </div>
@@ -169,7 +117,7 @@ export default function DeepAnalysisPage() {
                   <div className="text-center py-12 bg-red-500/10 backdrop-blur-sm rounded-lg border border-red-500/30">
                     <p className="text-red-400">{error}</p>
                   </div>
-                ) : selectedRepo && density && confidence ? (
+                ) : selectedRepoId && density && confidence ? (
                   <>
                     <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6 hover:border-white/20 hover:shadow-[0_8_32px_rgba(255,255,255,0.1)] transition-all animate-fadeInUp">
                       <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
@@ -179,28 +127,33 @@ export default function DeepAnalysisPage() {
 
                       <div className="grid md:grid-cols-2 gap-6">
                         <div>
-                          <p className="text-gray-400 text-sm mb-2">Total Comments</p>
-                          <p className="text-4xl font-bold text-white">{density.totalComments || 0}</p>
+                          <p className="text-gray-400 text-sm mb-2">Total Reviews</p>
+                          <p className="text-4xl font-bold text-white">{density.totalReviews || 0}</p>
                         </div>
 
                         <div>
-                          <p className="text-gray-400 text-sm mb-2">Comments per File</p>
+                          <p className="text-gray-400 text-sm mb-2">Avg Comments per PR</p>
                           <p className="text-4xl font-bold text-white">
-                            {density.commentsPerFile ? density.commentsPerFile.toFixed(1) : '0'}
+                            {density.avgCommentsPerPR || '0'}
                           </p>
                         </div>
 
-                        <div className="md:col-span-2">
-                          <p className="text-gray-400 text-sm mb-3">Activity Level</p>
-                          <span className={`inline-block text-sm font-semibold px-4 py-2 rounded-lg border ${getActivityLevel(density.activityLevel)}`}>
-                            {density.activityLevel && density.activityLevel.charAt(0).toUpperCase() + density.activityLevel.slice(1)} Activity
-                          </span>
+                        <div>
+                          <p className="text-gray-400 text-sm mb-2">Total Comments</p>
+                          <p className="text-2xl font-bold text-white">{density.totalComments || 0}</p>
+                        </div>
+
+                        <div>
+                          <p className="text-gray-400 text-sm mb-2">Avg per File</p>
+                          <p className="text-2xl font-bold text-white">{density.avgCommentsPerFile || 0}</p>
                         </div>
 
                         <div className="md:col-span-2">
                           <p className="text-gray-400 text-sm mb-3">Most Active PR</p>
                           <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                            <p className="text-white font-mono text-sm break-words">{density.mostActivePR || 'N/A'}</p>
+                            <p className="text-white font-mono text-sm break-words">
+                              {density.mostActivePR?.pull_number ? `PR #${density.mostActivePR.pull_number}` : 'N/A'}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -235,7 +188,7 @@ export default function DeepAnalysisPage() {
 
                     <div className="bg-gradient-to-br from-blue-500/10 to-white/5 backdrop-blur-md rounded-xl border border-blue-500/20 p-6 animate-fadeInUp">
                       <p className="text-blue-200 text-sm leading-relaxed">
-                        This repository shows {density.activityLevel} comment density with {confidence.high} high-confidence AI reviews. Focus on reducing comments per file to improve code clarity.
+                        This repository has {density.totalReviews || 0} reviewed PRs with {density.totalComments || 0} total comments. Average of {density.avgCommentsPerPR || 0} comments per PR. Focus on code clarity to reduce comment density.
                       </p>
                     </div>
                   </>

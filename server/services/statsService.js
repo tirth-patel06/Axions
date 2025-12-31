@@ -307,6 +307,9 @@ async function getRecentActivity({ userId, limit = 20 }) {
  */
 async function getUserSummary({ userId }) {
   try {
+    // Rebuild stats to ensure they're fresh
+    await rebuildRepoStats({ userId });
+
     const [repoStats, connectedRepos] = await Promise.all([
       RepoStats.find({ userId }).lean(),
       ConnectedRepo.countDocuments({ userId, isConnected: true })
@@ -407,17 +410,70 @@ async function getErrorRateTrends({ userId, days = 30 }) {
 }
 
 /**
+ * Rebuild repo stats from actual pull request reviews (data sync)
+ * Call this when stats are out of sync
+ * @param {string} userId - User MongoDB ObjectId
+ */
+async function rebuildRepoStats({ userId }) {
+  try {
+    // Get all reviews grouped by repoId
+    const reviews = await PullRequestReview.find({ userId })
+      .select('repoId commentsPosted')
+      .lean();
+
+    const statsMap = new Map();
+    reviews.forEach(r => {
+      if (!statsMap.has(r.repoId.toString())) {
+        statsMap.set(r.repoId.toString(), {
+          repoId: r.repoId,
+          totalPRsReviewed: 0,
+          totalInlineComments: 0
+        });
+      }
+      const stat = statsMap.get(r.repoId.toString());
+      stat.totalPRsReviewed++;
+      stat.totalInlineComments += r.commentsPosted || 0;
+    });
+
+    // Bulk update all RepoStats
+    for (const [repoIdStr, stat] of statsMap) {
+      await RepoStats.findOneAndUpdate(
+        { repoId: stat.repoId },
+        {
+          $set: {
+            totalPRsReviewed: stat.totalPRsReviewed,
+            totalInlineComments: stat.totalInlineComments,
+            lastActivityAt: new Date()
+          }
+        },
+        { upsert: true }
+      );
+    }
+
+    console.log(`✅ Rebuilt stats for ${statsMap.size} repos`);
+    return statsMap.size;
+  } catch (error) {
+    console.error("❌ Failed to rebuild repo stats:", error.message);
+    return 0;
+  }
+}
+
+/**
  * Get repo performance comparison (for multi-repo dashboard)
  * @param {string} userId - User MongoDB ObjectId
  * @returns {Promise<Array>} Repos sorted by activity: [{ repo, totalPRs, totalComments, lastActivity }]
  */
 async function getRepoComparison({ userId }) {
   try {
+    // Rebuild stats to ensure they're fresh
+    await rebuildRepoStats({ userId });
+
     const stats = await RepoStats.find({ userId })
       .populate('repoId', 'owner name fullName')
       .lean();
 
     return stats
+      .filter(s => s.totalPRsReviewed > 0) // Only include repos with actual data
       .map(s => ({
         repoId: s.repoId?._id,
         repo: s.repoId?.fullName || 'Unknown',
@@ -498,6 +554,7 @@ module.exports = {
   getRepoStats,
   recordError,
   recordIssueTriage,
+  rebuildRepoStats,
   // Analytics functions
   getReviewTimeSeries,
   getRecentActivity,

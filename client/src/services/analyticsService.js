@@ -11,7 +11,7 @@ export const getRecentActivity = async (limit = 25) => {
     return response.data.activity || [];
   } catch (error) {
     console.error('Error fetching recent activity:', error);
-    throw error;
+    return [];
   }
 };
 
@@ -25,7 +25,7 @@ export const getUserSummary = async () => {
     return response.data;
   } catch (error) {
     console.error('Error fetching user summary:', error);
-    throw error;
+    return {};
   }
 };
 
@@ -38,10 +38,10 @@ export const getReviewTimeSeries = async (params = {}) => {
   try {
     const queryString = new URLSearchParams(params).toString();
     const response = await api.get(`/api/analytics/timeseries?${queryString}`);
-    return response.data;
+    return response.data?.timeSeries || response.data || [];
   } catch (error) {
     console.error('Error fetching time series:', error);
-    throw error;
+    return [];
   }
 };
 
@@ -52,10 +52,10 @@ export const getReviewTimeSeries = async (params = {}) => {
 export const getRepoComparison = async () => {
   try {
     const response = await api.get('/api/analytics/repos/comparison');
-    return response.data;
+    return response.data?.repos || response.data || [];
   } catch (error) {
     console.error('Error fetching repo comparison:', error);
-    throw error;
+    return [];
   }
 };
 
@@ -66,10 +66,10 @@ export const getRepoComparison = async () => {
 export const getActivityHeatmap = async () => {
   try {
     const response = await api.get('/api/analytics/heatmap');
-    return response.data;
+    return response.data || {};
   } catch (error) {
     console.error('Error fetching activity heatmap:', error);
-    throw error;
+    return {};
   }
 };
 
@@ -82,39 +82,39 @@ export const getErrorTrends = async (params = {}) => {
   try {
     const queryString = new URLSearchParams(params).toString();
     const response = await api.get(`/api/analytics/errors/trends?${queryString}`);
-    return response.data;
+    return response.data || [];
   } catch (error) {
     console.error('Error fetching error trends:', error);
-    throw error;
+    return [];
   }
 };
 
 /**
  * Get comment density for a repository
- * @param {string} repoName - Repository name
+ * @param {string} repoId - Repository ID
  * @returns {Promise<Object>} Comment density data
  */
-export const getCommentDensity = async (repoName) => {
+export const getCommentDensity = async (repoId) => {
   try {
-    const response = await api.get(`/api/analytics/repo/${encodeURIComponent(repoName)}/density`);
-    return response.data;
+    const response = await api.get(`/api/analytics/repo/${encodeURIComponent(repoId)}/density`);
+    return response.data || {};
   } catch (error) {
     console.error('Error fetching comment density:', error);
-    throw error;
+    return {};
   }
 };
 
 /**
  * Get confidence distribution for a repository
- * @param {string} repoName - Repository name
+ * @param {string} repoId - Repository ID
  * @returns {Promise<Object>} Confidence distribution data
  */
-export const getConfidenceDistribution = async (repoName) => {
+export const getConfidenceDistribution = async (repoId) => {
   try {
-    const response = await api.get(`/api/analytics/repo/${encodeURIComponent(repoName)}/confidence`);
-    return response.data;
+    const response = await api.get(`/api/analytics/repo/${encodeURIComponent(repoId)}/confidence`);
+    return response.data || {};
   } catch (error) {
     console.error('Error fetching confidence distribution:', error);
-    throw error;
+    return {};
   }
 };

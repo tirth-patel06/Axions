@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { GitBranch, AlertCircle, Code2, Sparkles, ArrowRight, Globe, Lock, Loader2 } from 'lucide-react';
+import { GitBranch, AlertCircle, Code2, Sparkles, ArrowRight, Globe, Lock, Loader2, TrendingUp, BarChart3, AlertTriangle } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
+import StatCard from '../components/StatCard';
+import { useUserSummary, useRecentActivity } from '../hooks/useAnalyticsData';
 import { api } from '../lib/api';
 
 export default function DashboardPage() {
   const [user, setUser] = useState(null);
-  const [stats, setStats] = useState(null);
-  const [recentPRs, setRecentPRs] = useState([]);
   const [repositories, setRepositories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { data: stats } = useUserSummary();
+  const { data: activities } = useRecentActivity(5);
 
   useEffect(() => {
     fetchDashboardData();
@@ -20,33 +22,15 @@ export default function DashboardPage() {
       setLoading(true);
       
       // Fetch all data in parallel
-      const [userRes, statsRes, reposRes] = await Promise.all([
+      const [userRes, reposRes] = await Promise.all([
         api.get('/api/test/me'),
-        api.get('/api/analytics/summary'),
         api.get('/api/repos/connected')
       ]);
 
       setUser(userRes.data?.user);
-      setStats(statsRes.data);
       
       const connectedRepos = reposRes.data?.repos || [];
       setRepositories(connectedRepos.slice(0, 3)); // Show only 3 repos
-      
-      // Mock recent PRs for now (can be extended with real PR data)
-      setRecentPRs([
-        {
-          id: 1,
-          title: 'Recent code review',
-          repo: connectedRepos[0]?.name || 'Repository',
-          status: 'reviewed',
-        },
-        {
-          id: 2,
-          title: 'Active pull request',
-          repo: connectedRepos[0]?.name || 'Repository',
-          status: 'open',
-        }
-      ]);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {
@@ -54,36 +38,21 @@ export default function DashboardPage() {
     }
   };
 
-  const StatCard = ({ icon: Icon, label, value, color }) => (
-    <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6 hover:border-white/30 hover:bg-white/10 hover:shadow-[0_8_32px_rgba(255,255,255,0.1)] hover:-translate-y-1 transition-all duration-300 group animate-fadeInUp">
-      <div className="flex items-start justify-between mb-4">
-        <div className={`p-3 rounded-lg ${color} group-hover:scale-110 transition-transform`}>
-          <Icon className="w-6 h-6 text-white" />
-        </div>
-      </div>
-      <div className="space-y-1">
-        <p className="text-gray-400 text-sm font-medium">{label}</p>
-        <p className="text-3xl font-bold text-white">{value}</p>
-      </div>
-    </div>
-  );
-
-  const PRItem = ({ pr }) => (
+  const ActivityItem = ({ activity }) => (
     <div className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 p-4 hover:border-white/20 hover:bg-white/10 hover:shadow-[0_4_16px_rgba(255,255,255,0.1)] hover:-translate-y-0.5 transition-all duration-300 group cursor-pointer animate-fadeInUp">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
-            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${pr.status === 'open' ? 'bg-blue-500' : 'bg-green-500'}`} />
-            <p className="text-white font-medium truncate group-hover:text-gray-200 transition-colors">{pr.title}</p>
+            <div className="w-2 h-2 rounded-full flex-shrink-0 bg-blue-500" />
+            <p className="text-white font-medium truncate group-hover:text-gray-200 transition-colors">
+              PR #{activity.prNumber}
+            </p>
           </div>
-          <p className="text-gray-400 text-sm font-mono">{pr.repo}</p>
+          <p className="text-gray-400 text-sm font-mono">{activity.repo}</p>
+          <p className="text-gray-500 text-xs mt-1">{activity.filesAnalyzed} files • {activity.commentsPosted} comments</p>
         </div>
-        <span className={`text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${
-          pr.status === 'open'
-            ? 'bg-blue-500/20 text-blue-200 border border-blue-500/30'
-            : 'bg-green-500/20 text-green-200 border border-green-500/30'
-        }`}>
-          {pr.status === 'open' ? 'Open' : 'Reviewed'}
+        <span className="text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap flex-shrink-0 bg-blue-500/20 text-blue-200 border border-blue-500/30">
+          Reviewed
         </span>
       </div>
     </div>
@@ -147,28 +116,28 @@ export default function DashboardPage() {
 
           <div className="grid md:grid-cols-4 gap-6 mb-12">
             <StatCard
-              icon={AlertCircle}
-              label="Open Issues"
-              value={stats?.totalIssuesTriaged || 0}
+              icon={TrendingUp}
+              label="Total PRs Reviewed"
+              value={stats?.totalPRsReviewed || 0}
               color="bg-blue-500/20"
             />
             <StatCard
-              icon={GitBranch}
-              label="Total Pull Requests"
-              value={stats?.totalPRsReviewed || 0}
-              color="bg-purple-500/20"
-            />
-            <StatCard
-              icon={Code2}
-              label="Connected Repositories"
-              value={stats?.connectedRepos || 0}
+              icon={BarChart3}
+              label="Total Comments"
+              value={stats?.totalInlineComments || 0}
               color="bg-green-500/20"
             />
             <StatCard
-              icon={Sparkles}
-              label="AI Reviews Generated"
-              value={stats?.totalPRsReviewed || 0}
-              color="bg-yellow-500/20"
+              icon={Code2}
+              label="Avg Comments/PR"
+              value={stats?.avgCommentsPerPR || 0}
+              color="bg-purple-500/20"
+            />
+            <StatCard
+              icon={AlertTriangle}
+              label="Issues Triaged"
+              value={stats?.totalIssuesTriaged || 0}
+              color="bg-red-500/20"
             />
           </div>
 
@@ -186,10 +155,10 @@ export default function DashboardPage() {
                   </Link>
                 </div>
                 <div className="space-y-3">
-                  {recentPRs.length > 0 ? (
-                    recentPRs.map((pr, idx) => (
-                      <div key={pr.id} style={{ animationDelay: `${idx * 0.1}s` }}>
-                        <PRItem pr={pr} />
+                  {activities && activities.length > 0 ? (
+                    activities.map((activity, idx) => (
+                      <div key={activity._id || activity.prNumber || idx} style={{ animationDelay: `${idx * 0.1}s` }}>
+                        <ActivityItem activity={activity} />
                       </div>
                     ))
                   ) : (
@@ -244,8 +213,8 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <p className="text-gray-300 text-sm leading-relaxed">
-                    {stats?.avgReviewTime 
-                      ? `Average review time: ${stats.avgReviewTime.toFixed(1)} hours. Keep up the great work!`
+                    {stats?.avgCommentsPerPR 
+                      ? `Average comments per PR: ${stats.avgCommentsPerPR}. Excellent review quality!`
                       : 'Connect repositories and start reviewing PRs to get AI-powered insights!'}
                   </p>
                 </div>

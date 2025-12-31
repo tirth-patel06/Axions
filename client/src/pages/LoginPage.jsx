@@ -20,7 +20,7 @@ export default function LoginPage() {
           try {
             await api.get('/api/github/repos', { params: { per_page: 1 } });
             setStatus('Session valid. Redirecting...');
-            redirectTimer = setTimeout(() => navigate('/repositories'), 800);
+            redirectTimer = setTimeout(() => navigate('/dashboard'), 800);
             return;
           } catch {
             // Token present but invalid for GitHub; re-authenticate

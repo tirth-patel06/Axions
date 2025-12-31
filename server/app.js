@@ -30,7 +30,7 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 app.use(morgan("dev"));
 app.use(cors({ 
   origin: FRONTEND_URL, 
-  credentials: CORS_CREDENTIALS 
+  credentials: true
 }));
 app.use(cookieParser());
 app.use(passport.initialize());

@@ -156,19 +156,18 @@ async function getConnectedRepos(req, res) {
 
 /*DELETE /api/repos/:repoId/disconnect*/
 async function disconnectRepo(req, res) {
-  const session = await ConnectedRepo.startSession();
-  session.startTransaction();
-
   try {
     const user = req.user;
     const { repoId } = req.params;
+
+    console.log('Disconnect request for repoId:', repoId);
 
     // Find repo (must belong to current user)
     const connectedRepo = await ConnectedRepo.findOne({
       _id: repoId,
       userId: user._id,
       isConnected: true,
-    }).session(session);
+    });
 
     if (!connectedRepo) {
       return res.status(404).json({
@@ -176,15 +175,19 @@ async function disconnectRepo(req, res) {
       });
     }
 
+    console.log('Found connected repo:', connectedRepo.fullName);
+
     // Delete webhook from GitHub
     const octokit = new Octokit({ auth: user.accessToken });
     try {
-      await octokit.rest.repos.deleteWebhook({
-        owner: connectedRepo.owner,
-        repo: connectedRepo.name,
-        hook_id: connectedRepo.webhookId,
-      });
-      console.log(`✅ Webhook deleted for ${connectedRepo.fullName}`);
+      if (connectedRepo.webhookId) {
+        await octokit.rest.repos.deleteWebhook({
+          owner: connectedRepo.owner,
+          repo: connectedRepo.name,
+          hook_id: connectedRepo.webhookId,
+        });
+        console.log(`✅ Webhook deleted for ${connectedRepo.fullName}`);
+      }
     } catch (webhookErr) {
       // Log but don't fail - webhook might already be deleted
       console.warn(
@@ -197,9 +200,9 @@ async function disconnectRepo(req, res) {
     connectedRepo.isConnected = false;
     connectedRepo.webhookSecret = null;
     connectedRepo.webhookId = null;
-    await connectedRepo.save({ session });
+    await connectedRepo.save();
 
-    await session.commitTransaction();
+    console.log('✅ Repository disconnected successfully');
 
     return res.json({
       message: 'Repository disconnected successfully',
@@ -209,14 +212,12 @@ async function disconnectRepo(req, res) {
       },
     });
   } catch (err) {
-    await session.abortTransaction();
     console.error('Disconnect repo error:', err);
 
     return res.status(500).json({
       error: 'Failed to disconnect repository',
+      details: err.message,
     });
-  } finally {
-    session.endSession();
   }
 }
 

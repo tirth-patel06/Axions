@@ -1,58 +1,35 @@
-import { useState, useEffect } from 'react';
-import { BarChart3, AlertCircle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { useState } from 'react';
+import { BarChart3, AlertCircle, Tag, MessageSquare } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
-import { getRepoComparison } from '../services/analyticsService';
+import MetricCard from '../components/MetricCard';
+import { useRepoComparison } from '../hooks/useAnalyticsData';
 
 export default function RepoComparisonPage() {
-  const [repos, setRepos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [sortBy, setSortBy] = useState('prs');
-
-  useEffect(() => {
-    const fetchComparison = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await getRepoComparison();
-        setRepos(result || []);
-      } catch (error) {
-        console.error('Failed to fetch repo comparison:', error);
-        setError('Failed to load repository data. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchComparison();
-  }, []);
+  const [sortBy, setSortBy] = useState('name');
+  const { data: repos, loading, error } = useRepoComparison();
 
   const sortedRepos = [...repos].sort((a, b) => {
     switch (sortBy) {
       case 'name':
-        return (a.repoName || a.name || '').localeCompare(b.repoName || b.name || '');
+        return (a.repo || '').localeCompare(b.repo || '');
       case 'prs':
-        return (b.totalPRs || 0) - (a.totalPRs || 0);
-      case 'reviewTime':
-        return (a.avgReviewTime || 0) - (b.avgReviewTime || 0);
-      case 'successRate':
-        return (b.successRate || 0) - (a.successRate || 0);
+        return (b.totalPRsReviewed || 0) - (a.totalPRsReviewed || 0);
+      case 'issues':
+        return (b.totalIssuesTriaged || 0) - (a.totalIssuesTriaged || 0);
       default:
         return 0;
     }
   });
 
-  const maxPRs = Math.max(...repos.map(r => r.totalPRs || 0), 1);
-  const maxReviewTime = Math.max(...repos.map(r => r.avgReviewTime || 0), 1);
+  const maxPRs = Math.max(...repos.map(r => r.totalPRsReviewed || 0), 1);
 
-  const getTotalPRs = () => repos.reduce((sum, r) => sum + (r.totalPRs || 0), 0);
-  const getAvgReviewTime = () => repos.length > 0 
-    ? (repos.reduce((sum, r) => sum + (r.avgReviewTime || 0), 0) / repos.length).toFixed(1)
+  const getTotalPRs = () => repos.reduce((sum, r) => sum + (r.totalPRsReviewed || 0), 0);
+  const getTotalComments = () => repos.reduce((sum, r) => sum + (r.totalInlineComments || 0), 0);
+  const getAvgCommentsPerPR = () => repos.length > 0 
+    ? (getTotalComments() / getTotalPRs() || 0).toFixed(1)
     : 0;
-  const getAvgSuccessRate = () => repos.length > 0
-    ? (repos.reduce((sum, r) => sum + (r.successRate || 0), 0) / repos.length).toFixed(0)
-    : 0;
-  const getTotalComments = () => repos.reduce((sum, r) => sum + Math.round((r.avgComments || 0) * (r.totalPRs || 0)), 0);
+  const getTotalIssues = () => repos.reduce((sum, r) => sum + (r.totalIssuesTriaged || 0), 0);
+  const getTotalLabels = () => repos.reduce((sum, r) => sum + (r.totalLabelsApplied || 0), 0);
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
@@ -72,12 +49,14 @@ export default function RepoComparisonPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-sm hover:bg-white/20 transition-all"
+                className="bg-black/70 border border-white/10 rounded-lg px-3 py-2 text-white text-sm hover:bg-black/80 transition-all cursor-pointer"
+                style={{
+                  colorScheme: 'dark'
+                }}
               >
-                <option value="prs">Total PRs</option>
-                <option value="reviewTime">Review Time (fastest first)</option>
-                <option value="successRate">Success Rate</option>
-                <option value="name">Repository Name</option>
+                <option value="name" className="bg-black text-white">Repository Name</option>
+                <option value="prs" className="bg-black text-white">Total PRs</option>
+                <option value="issues" className="bg-black text-white">Total Issues</option>
               </select>
             </div>
             <p className="text-gray-400 text-sm">{repos.length} repositories</p>
@@ -94,61 +73,43 @@ export default function RepoComparisonPage() {
           ) : repos.length > 0 ? (
             <div className="space-y-4">
               {sortedRepos.map((repo, idx) => {
-                const prPercentage = ((repo.totalPRs || 0) / maxPRs) * 100;
-                const repoName = repo.repoName || repo.name || 'Unknown';
+                const prPercentage = ((repo.totalPRsReviewed || 0) / maxPRs) * 100;
 
                 return (
                   <div
-                    key={repoName}
+                    key={repo.repoId || repo.repo}
                     className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 p-5 hover:border-white/20 hover:bg-white/10 hover:shadow-[0_4_16px_rgba(255,255,255,0.1)] transition-all duration-300 animate-fadeInUp"
                     style={{ animationDelay: `${idx * 0.05}s` }}
                   >
-                    <div className="grid md:grid-cols-5 gap-4">
-                      <div className="md:col-span-1">
-                        <h3 className="text-white font-semibold text-lg truncate">{repoName}</h3>
+                    <div className="flex items-center justify-between gap-6">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-semibold text-lg truncate">{repo.repo}</h3>
                       </div>
 
-                      <div className="md:col-span-1">
-                        <p className="text-gray-400 text-xs mb-2">Total PRs</p>
-                        <div className="flex items-end gap-2">
-                          <p className="text-2xl font-bold text-white">{repo.totalPRs || 0}</p>
-                          <div className="w-12 h-8 bg-white/10 rounded-lg flex items-end overflow-hidden">
-                            <div
-                              className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-b"
-                              style={{ height: `${prPercentage}%` }}
-                            />
+                      <div className="flex items-center gap-6">
+                        <div className="text-center">
+                          <p className="text-gray-400 text-xs mb-1 flex items-center justify-center gap-1">
+                            <BarChart3 className="w-3 h-3" />
+                            Total PRs
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-2xl font-bold text-blue-400">{repo.totalPRsReviewed || 0}</p>
+                            <div className="w-12 h-8 bg-white/10 rounded-lg flex items-end overflow-hidden">
+                              <div
+                                className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-b"
+                                style={{ height: `${prPercentage}%` }}
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="md:col-span-1">
-                        <p className="text-gray-400 text-xs mb-2">Avg Review Time</p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-2xl font-bold text-white">{(repo.avgReviewTime || 0).toFixed(1)}h</p>
-                          {(repo.avgReviewTime || 0) < 4 ? (
-                            <ArrowDownRight className="w-4 h-4 text-green-400" />
-                          ) : (
-                            <ArrowUpRight className="w-4 h-4 text-red-400" />
-                          )}
+                        <div className="text-center">
+                          <p className="text-gray-400 text-xs mb-1 flex items-center justify-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            Issues Triaged
+                          </p>
+                          <p className="text-2xl font-bold text-purple-400">{repo.totalIssuesTriaged || 0}</p>
                         </div>
-                      </div>
-
-                      <div className="md:col-span-1">
-                        <p className="text-gray-400 text-xs mb-2">Success Rate</p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-2xl font-bold text-white">{(repo.successRate || 0).toFixed(0)}%</p>
-                          <div className="w-12 h-6 bg-white/10 rounded-lg flex items-center justify-center overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-green-500 to-green-400"
-                              style={{ width: `${repo.successRate || 0}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="md:col-span-1">
-                        <p className="text-gray-400 text-xs mb-2">Avg Comments</p>
-                        <p className="text-2xl font-bold text-white">{(repo.avgComments || 0).toFixed(1)}</p>
                       </div>
                     </div>
                   </div>
@@ -163,26 +124,37 @@ export default function RepoComparisonPage() {
           )}
 
           {repos.length > 0 && (
-            <div className="mt-8 grid md:grid-cols-4 gap-4">
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 p-4 animate-fadeInUp">
-                <p className="text-gray-400 text-sm mb-2">Total PRs</p>
-                <p className="text-3xl font-bold text-white">{getTotalPRs()}</p>
-              </div>
-
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 p-4 animate-fadeInUp">
-                <p className="text-gray-400 text-sm mb-2">Avg Review Time</p>
-                <p className="text-3xl font-bold text-white">{getAvgReviewTime()}h</p>
-              </div>
-
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 p-4 animate-fadeInUp">
-                <p className="text-gray-400 text-sm mb-2">Avg Success Rate</p>
-                <p className="text-3xl font-bold text-white">{getAvgSuccessRate()}%</p>
-              </div>
-
-              <div className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 p-4 animate-fadeInUp">
-                <p className="text-gray-400 text-sm mb-2">Total Comments</p>
-                <p className="text-3xl font-bold text-white">{getTotalComments()}</p>
-              </div>
+            <div className="mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <MetricCard 
+                icon={BarChart3}
+                label="Total PRs"
+                value={getTotalPRs()}
+              />
+              <MetricCard 
+                icon={MessageSquare}
+                label="Comments"
+                value={getTotalComments()}
+              />
+              <MetricCard 
+                icon={BarChart3}
+                label="Avg/PR"
+                value={getAvgCommentsPerPR()}
+              />
+              <MetricCard 
+                icon={AlertCircle}
+                label="Issues"
+                value={getTotalIssues()}
+              />
+              <MetricCard 
+                icon={Tag}
+                label="Labels"
+                value={getTotalLabels()}
+              />
+              <MetricCard 
+                icon={Tag}
+                label="Avg/Issue"
+                value={getTotalIssues() > 0 ? (getTotalLabels() / getTotalIssues()).toFixed(1) : 0}
+              />
             </div>
           )}
         </div>

@@ -19,7 +19,7 @@ export default function SuccessPage() {
     }, 1000);
 
     const redirectTimer = setTimeout(() => {
-      navigate('/repositories');
+      navigate('/dashboard');
     }, 3000);
 
     return () => {

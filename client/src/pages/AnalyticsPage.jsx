@@ -1,61 +1,79 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { TrendingUp, Calendar, AlertCircle } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
-import { getReviewTimeSeries } from '../services/analyticsService';
+import MetricCard from '../components/MetricCard';
+import { useReviewTimeSeries } from '../hooks/useAnalyticsData';
 
 export default function AnalyticsPage() {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [days, setDays] = useState(30);
+  const { data, loading, error } = useReviewTimeSeries(days);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await getReviewTimeSeries({ days });
-        setData(result || []);
-      } catch (error) {
-        console.error('Failed to fetch analytics:', error);
-        setError('Failed to load analytics. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [days]);
-
-  const totalPRs = data.reduce((sum, d) => sum + (d.count || 0), 0);
-  const avgComments = data.length > 0 
-    ? (data.reduce((sum, d) => sum + (d.avgComments || 0), 0) / data.length).toFixed(1) 
-    : 0;
+  const totalPRs = data.reduce((sum, d) => sum + (d.reviewCount || 0), 0);
+  const totalComments = data.reduce((sum, d) => sum + (d.commentCount || 0), 0);
+  const avgComments = totalPRs > 0 ? (totalComments / totalPRs).toFixed(1) : 0;
 
   const SimpleChart = ({ chartData }) => {
     if (!chartData || chartData.length === 0) return null;
     
-    const maxCount = Math.max(...chartData.map(d => d.count || 0), 1);
+    // Group data by week
+    const getWeeklyData = () => {
+      const weeks = new Map();
+      
+      chartData.forEach(day => {
+        const date = new Date(day.date);
+        // Get the Monday of the week
+        const dayOfWeek = date.getDay();
+        const diff = date.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        const monday = new Date(date.setDate(diff));
+        const weekKey = monday.toISOString().split('T')[0];
+        
+        if (!weeks.has(weekKey)) {
+          weeks.set(weekKey, {
+            weekStart: weekKey,
+            reviewCount: 0,
+            commentCount: 0
+          });
+        }
+        
+        const week = weeks.get(weekKey);
+        week.reviewCount += day.reviewCount || 0;
+        week.commentCount += day.commentCount || 0;
+      });
+      
+      return Array.from(weeks.values()).sort((a, b) => 
+        new Date(a.weekStart) - new Date(b.weekStart)
+      );
+    };
+    
+    const weeklyData = getWeeklyData();
+    const maxCount = Math.max(...weeklyData.map(w => w.reviewCount), 1);
 
     return (
-      <div className="flex items-end gap-1 h-48 justify-center">
-        {chartData.slice(-30).map((point, idx) => (
-          <div
-            key={idx}
-            className="flex-1 flex flex-col items-center group cursor-pointer"
-          >
+      <div className="flex items-end gap-3 h-64 px-4">
+        {weeklyData.map((week, idx) => {
+          const heightPx = (week.reviewCount / maxCount) * 200; // Use pixel height for reliable rendering
+          const date = new Date(week.weekStart);
+          const weekLabel = `${date.getDate()} ${date.toLocaleDateString('en-US', { month: 'short' })}`;
+          
+          return (
             <div
-              className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t hover:from-blue-400 hover:to-blue-300 transition-all duration-300"
-              style={{ height: `${(point.count / maxCount) * 100}%` }}
-              title={`${point.date}: ${point.count} PRs`}
-            />
-            {idx % 5 === 0 && (
-              <span className="text-xs text-gray-500 mt-2 w-full text-center">
-                {point.date?.slice(-5) || ''}
+              key={idx}
+              className="flex-1 flex flex-col items-center group cursor-pointer"
+            >
+              <div
+                className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t hover:from-blue-400 hover:to-blue-300 transition-all duration-300 relative"
+                style={{ height: `${heightPx}px` }}
+              >
+                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/90 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  {week.reviewCount} PRs
+                </div>
+              </div>
+              <span className="text-xs text-gray-400 mt-2 text-center">
+                {weekLabel}
               </span>
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -73,20 +91,16 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-6 mb-8">
-            <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6 hover:border-white/20 transition-all animate-fadeInUp">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5" />
-                  Total PRs ({days} days)
-                </h3>
-              </div>
-              <p className="text-4xl font-bold text-white">{totalPRs}</p>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6 hover:border-white/20 transition-all animate-fadeInUp">
-              <h3 className="text-white font-semibold mb-4">Avg Comments per PR</h3>
-              <p className="text-4xl font-bold text-white">{avgComments}</p>
-            </div>
+            <MetricCard 
+              icon={TrendingUp} 
+              label={`Total PRs (${days} days)`}
+              value={totalPRs}
+            />
+            <MetricCard 
+              icon={AlertCircle} 
+              label="Avg Comments per PR"
+              value={avgComments}
+            />
           </div>
 
           <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6 hover:border-white/20 hover:shadow-[0_8_32px_rgba(255,255,255,0.1)] transition-all animate-fadeInUp">
@@ -98,11 +112,12 @@ export default function AnalyticsPage() {
               <select
                 value={days}
                 onChange={(e) => setDays(Number(e.target.value))}
-                className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-sm hover:bg-white/20 transition-all"
+                className="bg-black/70 border border-white/10 rounded-lg px-3 py-2 text-white text-sm hover:bg-black/80 transition-all cursor-pointer"
+                style={{ colorScheme: 'dark' }}
               >
-                <option value={7}>Last 7 days</option>
-                <option value={30}>Last 30 days</option>
-                <option value={90}>Last 90 days</option>
+                <option value={7} className="bg-black text-white">Last 7 days</option>
+                <option value={30} className="bg-black text-white">Last 30 days</option>
+                <option value={90} className="bg-black text-white">Last 90 days</option>
               </select>
             </div>
 
@@ -131,9 +146,9 @@ export default function AnalyticsPage() {
               {data.slice(-3).reverse().map((point, idx) => (
                 <div key={idx} className="bg-white/5 rounded-lg p-4 border border-white/10">
                   <p className="text-gray-400 text-sm mb-2">{point.date}</p>
-                  <p className="text-2xl font-bold text-white">{point.count}</p>
+                  <p className="text-2xl font-bold text-white">{point.reviewCount}</p>
                   <p className="text-xs text-gray-500 mt-2">
-                    Avg: {point.avgComments?.toFixed(1) || '0'} comments
+                    {point.commentCount} comments
                   </p>
                 </div>
               ))}

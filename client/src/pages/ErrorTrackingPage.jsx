@@ -1,58 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AlertTriangle, Calendar, AlertCircle } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
-import { getErrorTrends } from '../services/analyticsService';
+import MetricCard from '../components/MetricCard';
+import { useErrorTrends } from '../hooks/useAnalyticsData';
 
 export default function ErrorTrackingPage() {
-  const [errors, setErrors] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [days, setDays] = useState(30);
+  const { data, loading, error } = useErrorTrends(days);
 
-  useEffect(() => {
-    const fetchErrors = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await getErrorTrends({ days });
-        setErrors(result || []);
-      } catch (error) {
-        console.error('Failed to fetch error trends:', error);
-        setError('Failed to load error data. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const totalErrors = data?.totalErrors || 0;
+  const errorRateNum = parseFloat(data?.errorRate) || 0;
 
-    fetchErrors();
-  }, [days]);
-
-  const totalErrors = errors.reduce((sum, e) => sum + (e.errorCount || 0), 0);
-  const avgErrorRate = errors.length > 0 
-    ? (errors.reduce((sum, e) => sum + (e.errorRate || 0), 0) / errors.length).toFixed(1) 
-    : 0;
-  const maxErrors = Math.max(...errors.map(e => e.errorCount || 0), 1);
-
-  const SimpleChart = ({ chartData }) => {
-    if (!chartData || chartData.length === 0) return null;
+  const SimpleChart = ({ recentErrors }) => {
+    if (!recentErrors || recentErrors.length === 0) return null;
     
+    // Create a simple visualization of error count
     return (
-      <div className="flex items-end gap-1 h-48 justify-center">
-        {chartData.slice(-30).map((point, idx) => (
-          <div
-            key={idx}
-            className="flex-1 flex flex-col items-center group cursor-pointer"
-          >
-            <div
-              className="w-full bg-gradient-to-t from-red-500 to-red-400 rounded-t hover:from-red-400 hover:to-red-300 transition-all duration-300"
-              style={{ height: `${(point.errorCount / maxErrors) * 100}%` }}
-              title={`${point.date}: ${point.errorCount} errors (${point.errorRate?.toFixed(1) || '0'}%)`}
-            />
-            {idx % 5 === 0 && (
-              <span className="text-xs text-gray-500 mt-2 w-full text-center">
-                {point.date?.slice(-5) || ''}
-              </span>
-            )}
+      <div className="space-y-3">
+        {recentErrors.map((errorItem, idx) => (
+          <div key={idx} className="flex items-start gap-4">
+            <div className="flex-shrink-0 w-32">
+              <p className="text-gray-400 text-sm font-mono truncate">
+                {errorItem.repo ? errorItem.repo.split('/')[1] || errorItem.repo : 'Unknown'}
+              </p>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-white text-sm">PR #{errorItem.prNumber}</p>
+                <p className="text-red-400 text-sm font-bold">{errorItem.error}</p>
+              </div>
+              <p className="text-gray-500 text-xs">{new Date(errorItem.createdAt).toLocaleDateString()}</p>
+            </div>
           </div>
         ))}
       </div>
@@ -72,28 +50,21 @@ export default function ErrorTrackingPage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6 hover:border-white/20 transition-all animate-fadeInUp">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-red-400" />
-                  Total Errors
-                </h3>
-              </div>
-              <p className="text-4xl font-bold text-white">{totalErrors}</p>
-              <p className="text-xs text-gray-500 mt-2">in {days} days</p>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6 hover:border-white/20 transition-all animate-fadeInUp">
-              <h3 className="text-white font-semibold mb-4">Avg Error Rate</h3>
-              <p className="text-4xl font-bold text-white">{avgErrorRate}%</p>
-              <p className="text-xs text-gray-500 mt-2">per day</p>
-            </div>
-
+            <MetricCard 
+              icon={AlertTriangle}
+              label={`Total Errors (${days} days)`}
+              value={totalErrors}
+            />
+            <MetricCard 
+              icon={AlertTriangle}
+              label="Avg Error Rate"
+              value={`${errorRateNum.toFixed(2)}%`}
+            />
             <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6 hover:border-white/20 transition-all animate-fadeInUp">
               <h3 className="text-white font-semibold mb-4">Status</h3>
               <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${avgErrorRate < 2 ? 'bg-green-500 animate-pulse' : 'bg-red-500 animate-pulse'}`} />
-                <p className="text-white font-semibold">{avgErrorRate < 2 ? 'Healthy' : 'Needs Attention'}</p>
+                <div className={`w-3 h-3 rounded-full ${errorRateNum < 5 ? 'bg-green-500 animate-pulse' : 'bg-red-500 animate-pulse'}`} />
+                <p className="text-white font-semibold">{errorRateNum < 5 ? 'Healthy' : 'Needs Attention'}</p>
               </div>
             </div>
           </div>
@@ -107,11 +78,12 @@ export default function ErrorTrackingPage() {
               <select
                 value={days}
                 onChange={(e) => setDays(Number(e.target.value))}
-                className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-sm hover:bg-white/20 transition-all"
+                className="bg-black/70 border border-white/10 rounded-lg px-3 py-2 text-white text-sm hover:bg-black/80 transition-all cursor-pointer"
+                style={{ colorScheme: 'dark' }}
               >
-                <option value={7}>Last 7 days</option>
-                <option value={30}>Last 30 days</option>
-                <option value={90}>Last 90 days</option>
+                <option value={7} className="bg-black text-white">Last 7 days</option>
+                <option value={30} className="bg-black text-white">Last 30 days</option>
+                <option value={90} className="bg-black text-white">Last 90 days</option>
               </select>
             </div>
 
@@ -123,36 +95,17 @@ export default function ErrorTrackingPage() {
 
             {loading ? (
               <div className="h-48 flex items-center justify-center">
-                <p className="text-gray-400">Loading chart...</p>
+                <p className="text-gray-400">Loading error data...</p>
               </div>
-            ) : errors.length > 0 ? (
+            ) : data?.recentErrors && data.recentErrors.length > 0 ? (
               <>
-                <SimpleChart chartData={errors} />
-                <div className="mt-6 grid md:grid-cols-3 gap-4">
-                  {errors.slice(-3).reverse().map((errorData, idx) => (
-                    <div key={idx} className="bg-white/5 rounded-lg p-4 border border-white/10 hover:border-white/20 transition-all">
-                      <p className="text-gray-400 text-sm mb-2">{errorData.date}</p>
-                      <div className="space-y-2">
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Errors</p>
-                          <p className="text-2xl font-bold text-red-400">{errorData.errorCount || 0}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Rate</p>
-                          <p className="text-lg font-bold text-white">
-                            {errorData.errorRate?.toFixed(1) || '0'}%
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <SimpleChart recentErrors={data.recentErrors} />
               </>
             ) : (
               <div className="h-48 flex items-center justify-center">
                 <p className="text-gray-400 flex items-center gap-2">
                   <AlertCircle className="w-5 h-5" />
-                  No error data available
+                  No errors found - Great job! 🎉
                 </p>
               </div>
             )}

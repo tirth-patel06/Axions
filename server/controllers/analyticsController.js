@@ -156,6 +156,65 @@ async function getActivityHeatmap(req, res) {
   }
 }
 
+/**
+ * GET /api/analytics/issues/timeseries
+ * Returns issue triage activity over time for graphs
+ * Query params: repoId (optional), days (default 30)
+ */
+async function getIssueTriageTimeSeries(req, res) {
+  try {
+    const userId = req.user._id;
+    const repoId = req.query.repoId || null;
+    const days = parseInt(req.query.days) || 30;
+
+    const timeSeries = await statsService.getIssueTriageTimeSeries({ userId, repoId, days });
+    return res.json({ timeSeries });
+  } catch (error) {
+    console.error('Get issue triage time series error:', error);
+    return res.status(500).json({ error: 'Failed to get issue triage time series' });
+  }
+}
+
+/**
+ * GET /api/analytics/repo/:repoId/issues
+ * Returns issue triage analysis for a specific repo
+ */
+async function getIssueTriageAnalysis(req, res) {
+  try {
+    const { repoId } = req.params;
+    const analysis = await statsService.getIssueTriageAnalysis({ repoId });
+
+    if (!analysis) {
+      return res.status(404).json({ error: 'No data found for this repo' });
+    }
+
+    return res.json(analysis);
+  } catch (error) {
+    console.error('Get issue triage analysis error:', error);
+    return res.status(500).json({ error: 'Failed to get issue triage analysis' });
+  }
+}
+
+/**
+ * GET /api/analytics/repo/:repoId/labels
+ * Returns label distribution for triaged issues in a repo
+ */
+async function getLabelDistribution(req, res) {
+  try {
+    const { repoId } = req.params;
+    const distribution = await statsService.getLabelDistribution({ repoId });
+
+    if (!distribution) {
+      return res.status(404).json({ error: 'No data found for this repo' });
+    }
+
+    return res.json(distribution);
+  } catch (error) {
+    console.error('Get label distribution error:', error);
+    return res.status(500).json({ error: 'Failed to get label distribution' });
+  }
+}
+
 module.exports = {
   getUserSummary,
   getRecentActivity,
@@ -164,5 +223,9 @@ module.exports = {
   getCommentDensity,
   getConfidenceDistribution,
   getErrorTrends,
-  getActivityHeatmap
+  getActivityHeatmap,
+  // Issue triage endpoints
+  getIssueTriageTimeSeries,
+  getIssueTriageAnalysis,
+  getLabelDistribution
 };

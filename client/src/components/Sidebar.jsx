@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, GitBranch, AlertCircle, Settings, LogOut, TrendingUp, Activity, BarChart3, Zap } from 'lucide-react';
+import { LayoutDashboard, GitBranch, AlertCircle, User, LogOut, TrendingUp, Activity, BarChart3, Zap } from 'lucide-react';
 import Logo from './Logo';
 
 export default function Sidebar() {
@@ -47,13 +47,19 @@ export default function Sidebar() {
 
       <div className="border-t border-white/10 p-4 space-y-2">
         <Link
-          to="/settings"
+          to="/profile"
           className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-300"
         >
-          <Settings className="w-5 h-5 flex-shrink-0" />
-          <span className="font-medium">Settings</span>
+          <User className="w-5 h-5 flex-shrink-0" />
+          <span className="font-medium">Profile</span>
         </Link>
-        <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-300">
+        <button 
+          onClick={() => {
+            localStorage.removeItem('token');
+            window.location.href = '/';
+          }}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-300"
+        >
           <LogOut className="w-5 h-5 flex-shrink-0" />
           <span className="font-medium">Logout</span>
         </button>

@@ -15,14 +15,25 @@ passport.use(
       try {
         let user = await User.findOne({ githubId: profile.id });
 
+
+        // Extract email (GitHub may return array or undefined)
+        let githubEmail = null;
+        if (profile.emails && profile.emails.length > 0) {
+          githubEmail = profile.emails[0].value;
+        }
+
         if (!user) {
           user = await User.create({
             githubId: profile.id,
-            username: profile.username,
+            githubUsername: profile.username,
+            email: githubEmail,
             avatar: profile.photos?.[0]?.value,
             accessToken,
           });
         } else {
+          user.githubUsername = profile.username;
+          user.email = githubEmail;
+          user.avatar = profile.photos?.[0]?.value;
           user.accessToken = accessToken; // update token
           await user.save();
         }

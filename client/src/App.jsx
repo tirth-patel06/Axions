@@ -9,6 +9,7 @@ import ActivityPage from './pages/ActivityPage.jsx';
 import RepoComparisonPage from './pages/RepoComparisonPage.jsx';
 import DeepAnalysisPage from './pages/DeepAnalysisPage.jsx';
 import ErrorTrackingPage from './pages/ErrorTrackingPage.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
       <Route path="/repo-comparison" element={<RepoComparisonPage />} />
       <Route path="/analysis" element={<DeepAnalysisPage />} />
       <Route path="/errors" element={<ErrorTrackingPage />} />
+      <Route path="/profile" element={<ProfilePage />} />
       <Route path="/repositories" element={<RepositoriesPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

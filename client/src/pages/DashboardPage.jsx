@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { GitBranch, AlertCircle, Code2, Sparkles, ArrowRight, Globe, Lock, Loader2, TrendingUp, BarChart3, AlertTriangle, Tag } from 'lucide-react';
+import { GitBranch, AlertCircle, Code2, Sparkles, ArrowRight, Globe, Lock, Loader2, TrendingUp, BarChart3, Tag, Bookmark} from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import StatCard from '../components/StatCard';
 import { useUserSummary, useRecentActivity } from '../hooks/useAnalyticsData';
@@ -150,10 +150,10 @@ export default function DashboardPage() {
               color="bg-purple-500/20"
             />
             <StatCard
-              icon={AlertTriangle}
+              icon={Bookmark}
               label="Issues Triaged"
               value={stats?.totalIssuesTriaged || 0}
-              color="bg-red-500/20"
+              color="bg-purple-500/20"
             />
           </div>
 

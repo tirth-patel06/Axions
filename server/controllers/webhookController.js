@@ -4,6 +4,7 @@ const { orchestrateReview } = require("../services/reviewService");
 const { generateIssueLabels, generateIssueSummary } = require("../services/llmService");
 const { applyColoredLabels, postIssueSummaryComment } = require("../services/githubService");
 const IssueTriage = require("../models/IssueTriage");
+const { Octokit } = require("@octokit/rest");
 
 /**
  * Orchestrates the issue labeling and summarization process
@@ -20,31 +21,25 @@ async function orchestrateIssueLabeling(payload, connectedRepo) {
       repository: { owner: { login: owner }, name: repo },
     } = payload;
 
-    console.log(`\n🏷️  Starting issue processing for ${owner}/${repo} #${issue_number}: "${title}"`);
+    // Create Octokit instance with the user's GitHub access token
+    const octokit = new Octokit({ auth: connectedRepo.userId.accessToken });
 
     // Step 1: Generate labels using LLM (if feature is enabled)
     if (process.env.FEATURE_ISSUE_LABELING === "true" || process.env.ENABLE_AUTO_LABELS === "true") {
-      console.log(`\n⏳ Step 1: Generating labels...`);
       const labels = await generateIssueLabels(title, description);
 
       if (labels.length > 0) {
         // Apply colored labels to the GitHub issue
-        await applyColoredLabels(connectedRepo.userId.octokit, owner, repo, issue_number, labels);
-        console.log(`✅ Applied ${labels.length} colored label(s) to issue #${issue_number}`);
-      } else {
-        console.log(`⚠️  No labels generated for issue #${issue_number}`);
+        await applyColoredLabels(octokit, owner, repo, issue_number, labels);
       }
     }
 
     // Step 2: Generate summary using LLM (if feature is enabled)
     if (process.env.FEATURE_ISSUE_SUMMARIZATION === "true" || process.env.ENABLE_AUTO_SUMMARY === "true") {
-      console.log(`\n⏳ Step 2: Generating summary...`);
       const summary = await generateIssueSummary(title, description);
 
       // Step 3: Post summary as comment
-      console.log(`\n⏳ Step 3: Posting summary comment...`);
-      await postIssueSummaryComment(connectedRepo.userId.octokit, owner, repo, issue_number, summary);
-      console.log(`✅ Summary comment posted to issue #${issue_number}`);
+      await postIssueSummaryComment(octokit, owner, repo, issue_number, summary);
     }
 
     // Step 4: Save triage information to database
@@ -66,7 +61,6 @@ async function orchestrateIssueLabeling(payload, connectedRepo) {
       { upsert: true, new: true }
     );
 
-    console.log(`✅ Issue #${issue_number} fully processed with labels and summary!\n`);
     return issueTriage;
   } catch (error) {
     console.error("❌ Error in issue labeling orchestration:", error);

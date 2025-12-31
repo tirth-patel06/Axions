@@ -25,13 +25,13 @@ passport.use(
         if (!user) {
           user = await User.create({
             githubId: profile.id,
-            githubUsername: profile.username,
+            username: profile.username,
             email: githubEmail,
             avatar: profile.photos?.[0]?.value,
             accessToken,
           });
         } else {
-          user.githubUsername = profile.username;
+          user.username = profile.username;
           user.email = githubEmail;
           user.avatar = profile.photos?.[0]?.value;
           user.accessToken = accessToken; // update token

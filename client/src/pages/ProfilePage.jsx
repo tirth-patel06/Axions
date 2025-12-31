@@ -52,7 +52,7 @@ export default function ProfilePage() {
               <div className="relative">
                 <img
                   src={user?.githubAvatarUrl || 'https://github.com/identicons/default.png'}
-                  alt={user?.githubUsername || 'GitHub Avatar'}
+                  alt={user?.username || 'GitHub Avatar'}
                   className="w-24 h-24 rounded-full border-2 border-white/20"
                 />
                 <div className="absolute -bottom-2 -right-2 bg-white/10 backdrop-blur-sm rounded-full p-2 border border-white/20">
@@ -61,7 +61,7 @@ export default function ProfilePage() {
               </div>
 
               <div className="flex-1">
-                <h2 className="text-2xl font-bold text-white mb-2">{user?.githubUsername || <span className="text-gray-500">No GitHub username</span>}</h2>
+                <h2 className="text-2xl font-bold text-white mb-2">{user?.username || <span className="text-gray-500">No GitHub username</span>}</h2>
                 <p className="text-gray-400 mb-4">{user?.email || <span className="text-gray-500">No GitHub email</span>}</p>
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <Calendar className="w-4 h-4" />
@@ -78,7 +78,7 @@ export default function ProfilePage() {
                     GitHub Username
                   </label>
                   <div className="bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white">
-                    {user?.githubUsername || <span className="text-gray-500">No GitHub username</span>}
+                    {user?.username || <span className="text-gray-500">No GitHub username</span>}
                   </div>
                 </div>
 

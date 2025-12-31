@@ -6,7 +6,7 @@ const router = express.Router();
 router.get("/me", auth, (req, res) => {
   res.json({
     githubId: req.user.githubId,
-    githubUsername: req.user.githubUsername,
+    username: req.user.username,
     githubAvatarUrl: req.user.avatar, // match schema
     email: req.user.email,
     accessToken: req.user.accessToken ? "***" : null, // masked for security

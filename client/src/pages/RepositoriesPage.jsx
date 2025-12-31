@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Lock, Unlock, GitFork, Calendar, Loader2 } from 'lucide-react';
+import { Lock, Unlock, GitFork, Calendar, Loader2, Unplug, ArrowLeft } from 'lucide-react';
 import Logo from '../components/Logo';
 import { api } from '../lib/api';
 
@@ -8,6 +8,7 @@ export default function RepositoriesPage() {
   const [repos, setRepos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(null);
+  const [disconnecting, setDisconnecting] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -75,6 +76,46 @@ export default function RepositoriesPage() {
     }
   };
 
+  const handleDisconnect = async (repo) => {
+    if (!confirm(`Are you sure you want to disconnect ${repo.fullName}?`)) {
+      return;
+    }
+
+    setDisconnecting(repo.id);
+    setError(null);
+
+    try {
+      // Need to find the connected repo ID first
+      const connectedResponse = await api.get('/api/repos/connected');
+      const connectedRepo = connectedResponse.data?.repos?.find(
+        (r) => r.githubRepoId === repo.id
+      );
+
+      if (!connectedRepo || !connectedRepo.id) {
+        throw new Error('Connected repository not found');
+      }
+
+      console.log('Disconnecting repo:', connectedRepo.id);
+      await api.delete(`/api/repos/${connectedRepo.id}/disconnect`);
+
+      // Update local state on success
+      setRepos((prev) =>
+        prev.map((r) =>
+          r.id === repo.id ? { ...r, connected: false } : r
+        )
+      );
+    } catch (err) {
+      console.error('Failed to disconnect repository:', err);
+      const message = err.response?.data?.error || err.message || 'Failed to disconnect repository';
+      setError(message);
+      
+      // Auto-dismiss error after 4 seconds
+      setTimeout(() => setError(null), 4000);
+    } finally {
+      setDisconnecting(null);
+    }
+  };
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -104,6 +145,13 @@ export default function RepositoriesPage() {
         )}
 
         <div className="mb-12">
+          <Link 
+            to="/dashboard" 
+            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </Link>
           <h1 className="text-4xl font-bold text-white mb-3">
             Your GitHub Repositories
           </h1>
@@ -178,9 +226,23 @@ export default function RepositoriesPage() {
 
                   <div className="mt-auto">
                     {repo.connected ? (
-                      <div className="w-full py-3 px-4 rounded-lg bg-neutral-800 text-gray-300 border border-neutral-700 text-center font-medium text-sm">
-                        Connected
-                      </div>
+                      <button
+                        onClick={() => handleDisconnect(repo)}
+                        disabled={disconnecting === repo.id}
+                        className="w-full py-3 px-4 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20 hover:border-red-500/50 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2 font-medium"
+                      >
+                        {disconnecting === repo.id ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Disconnecting...
+                          </>
+                        ) : (
+                          <>
+                            <Unplug className="w-4 h-4" />
+                            Disconnect
+                          </>
+                        )}
+                      </button>
                     ) : (
                       <button
                         onClick={() => handleConnect(repo)}

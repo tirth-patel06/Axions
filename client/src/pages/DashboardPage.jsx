@@ -81,7 +81,7 @@ export default function DashboardPage() {
           <GitBranch className="w-4 h-4 text-gray-400 group-hover:text-white group-hover:scale-110 transition-all" />
           <p className="text-white font-semibold group-hover:text-gray-200 transition-colors">{repo.name}</p>
         </div>
-        {repo.isPrivate ? (
+        {repo.private || repo.isPrivate ? (
           <Lock className="w-4 h-4 text-gray-500 flex-shrink-0" />
         ) : (
           <Globe className="w-4 h-4 text-gray-500 flex-shrink-0" />

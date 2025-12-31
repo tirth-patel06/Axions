@@ -21,7 +21,6 @@ export default function Sidebar() {
       <div className="p-6 border-b border-white/10">
         <Link to="/" className="flex items-center gap-3 hover:scale-105 transition-transform">
           <Logo />
-          <span className="text-white font-bold text-lg">Axion</span>
         </Link>
       </div>
 

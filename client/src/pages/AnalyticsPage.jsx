@@ -10,7 +10,7 @@ export default function AnalyticsPage() {
 
   const totalPRs = data.reduce((sum, d) => sum + (d.reviewCount || 0), 0);
   const totalComments = data.reduce((sum, d) => sum + (d.commentCount || 0), 0);
-  const avgComments = data.length > 0 ? (totalComments / data.length).toFixed(1) : 0;
+  const avgComments = totalPRs > 0 ? (totalComments / totalPRs).toFixed(1) : 0;
 
   const SimpleChart = ({ chartData }) => {
     if (!chartData || chartData.length === 0) return null;

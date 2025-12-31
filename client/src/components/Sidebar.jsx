@@ -9,7 +9,7 @@ export default function Sidebar() {
 
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-    { icon: TrendingUp, label: 'Analytics', path: '/analytics' },
+    { icon: TrendingUp, label: 'PR Analytics', path: '/analytics' },
     { icon: Activity, label: 'Activity Feed', path: '/activity' },
     { icon: BarChart3, label: 'Repo Performance', path: '/repo-comparison' },
     { icon: Zap, label: 'Deep Analysis', path: '/analysis' },

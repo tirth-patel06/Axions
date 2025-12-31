@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BarChart3, AlertCircle } from 'lucide-react';
+import { BarChart3, AlertCircle, Tag, MessageSquare } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import MetricCard from '../components/MetricCard';
 import { useRepoComparison } from '../hooks/useAnalyticsData';
@@ -31,6 +31,7 @@ export default function RepoComparisonPage() {
     ? (getTotalComments() / getTotalPRs() || 0).toFixed(1)
     : 0;
   const getTotalIssues = () => repos.reduce((sum, r) => sum + (r.totalIssuesTriaged || 0), 0);
+  const getTotalLabels = () => repos.reduce((sum, r) => sum + (r.totalLabelsApplied || 0), 0);
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
@@ -80,37 +81,35 @@ export default function RepoComparisonPage() {
                     className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 p-5 hover:border-white/20 hover:bg-white/10 hover:shadow-[0_4_16px_rgba(255,255,255,0.1)] transition-all duration-300 animate-fadeInUp"
                     style={{ animationDelay: `${idx * 0.05}s` }}
                   >
-                    <div className="grid md:grid-cols-5 gap-4">
-                      <div className="md:col-span-1">
+                    <div className="flex items-center justify-between gap-6">
+                      <div className="flex-1 min-w-0">
                         <h3 className="text-white font-semibold text-lg truncate">{repo.repo}</h3>
                       </div>
 
-                      <div className="md:col-span-1">
-                        <p className="text-gray-400 text-xs mb-2">Total PRs</p>
-                        <div className="flex items-end gap-2">
-                          <p className="text-2xl font-bold text-white">{repo.totalPRsReviewed || 0}</p>
-                          <div className="w-12 h-8 bg-white/10 rounded-lg flex items-end overflow-hidden">
-                            <div
-                              className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-b"
-                              style={{ height: `${prPercentage}%` }}
-                            />
+                      <div className="flex items-center gap-6">
+                        <div className="text-center">
+                          <p className="text-gray-400 text-xs mb-1 flex items-center justify-center gap-1">
+                            <BarChart3 className="w-3 h-3" />
+                            Total PRs
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-2xl font-bold text-blue-400">{repo.totalPRsReviewed || 0}</p>
+                            <div className="w-12 h-8 bg-white/10 rounded-lg flex items-end overflow-hidden">
+                              <div
+                                className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-b"
+                                style={{ height: `${prPercentage}%` }}
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="md:col-span-1">
-                        <p className="text-gray-400 text-xs mb-2">Total Comments</p>
-                        <p className="text-2xl font-bold text-white">{repo.totalInlineComments || 0}</p>
-                      </div>
-
-                      <div className="md:col-span-1">
-                        <p className="text-gray-400 text-xs mb-2">Avg per PR</p>
-                        <p className="text-2xl font-bold text-white">{repo.avgCommentsPerPR || 0}</p>
-                      </div>
-
-                      <div className="md:col-span-1">
-                        <p className="text-gray-400 text-xs mb-2">Issues Triaged</p>
-                        <p className="text-2xl font-bold text-white">{repo.totalIssuesTriaged || 0}</p>
+                        <div className="text-center">
+                          <p className="text-gray-400 text-xs mb-1 flex items-center justify-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            Issues Triaged
+                          </p>
+                          <p className="text-2xl font-bold text-purple-400">{repo.totalIssuesTriaged || 0}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -125,26 +124,36 @@ export default function RepoComparisonPage() {
           )}
 
           {repos.length > 0 && (
-            <div className="mt-8 grid md:grid-cols-4 gap-4">
+            <div className="mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <MetricCard 
                 icon={BarChart3}
-                label="Total PRs Reviewed"
+                label="Total PRs"
                 value={getTotalPRs()}
               />
               <MetricCard 
-                icon={BarChart3}
-                label="Total Comments"
+                icon={MessageSquare}
+                label="Comments"
                 value={getTotalComments()}
               />
               <MetricCard 
                 icon={BarChart3}
-                label="Avg Comments per PR"
+                label="Avg/PR"
                 value={getAvgCommentsPerPR()}
               />
               <MetricCard 
                 icon={AlertCircle}
-                label="Issues Triaged"
+                label="Issues"
                 value={getTotalIssues()}
+              />
+              <MetricCard 
+                icon={Tag}
+                label="Labels"
+                value={getTotalLabels()}
+              />
+              <MetricCard 
+                icon={Tag}
+                label="Avg/Issue"
+                value={getTotalIssues() > 0 ? (getTotalLabels() / getTotalIssues()).toFixed(1) : 0}
               />
             </div>
           )}

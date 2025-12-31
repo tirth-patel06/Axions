@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Zap, AlertCircle, Activity } from 'lucide-react';
+import { Zap, AlertCircle, Activity, Tag } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
-import { useRepoComparison, useCommentDensity, useConfidenceDistribution } from '../hooks/useAnalyticsData';
+import { useRepoComparison, useCommentDensity, useConfidenceDistribution, useIssueTriageAnalysis } from '../hooks/useAnalyticsData';
 
 const ConfidenceChart = ({ data }) => {
   if (!data) return null;
@@ -53,6 +53,7 @@ export default function DeepAnalysisPage() {
   const { data: repos, loading } = useRepoComparison();
   const { data: density, loading: densityLoading } = useCommentDensity(selectedRepoId);
   const { data: confidence, loading: confidenceLoading } = useConfidenceDistribution(selectedRepoId);
+  const { data: issueTriage, loading: issueTriageLoading } = useIssueTriageAnalysis(selectedRepoId);
 
   // Set initial selectedRepoId when repos load
   if (repos && repos.length > 0 && !selectedRepoId) {
@@ -60,7 +61,7 @@ export default function DeepAnalysisPage() {
   }
 
   const error = null;
-  const isAnalysisLoading = densityLoading || confidenceLoading;
+  const isAnalysisLoading = densityLoading || confidenceLoading || issueTriageLoading;
 
   return (
     <div className="min-h-screen bg-black relative overflow-hidden">
@@ -159,10 +160,11 @@ export default function DeepAnalysisPage() {
                       </div>
                     </div>
 
+
                     <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6 hover:border-white/20 hover:shadow-[0_8_32px_rgba(255,255,255,0.1)] transition-all animate-fadeInUp">
                       <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                         <Zap className="w-5 h-5" />
-                        AI Review Confidence Distribution
+                        AI PR Review Confidence Distribution
                       </h2>
 
                       <ConfidenceChart data={confidence} />
@@ -186,11 +188,48 @@ export default function DeepAnalysisPage() {
                       </div>
                     </div>
 
-                    <div className="bg-gradient-to-br from-blue-500/10 to-white/5 backdrop-blur-md rounded-xl border border-blue-500/20 p-6 animate-fadeInUp">
-                      <p className="text-blue-200 text-sm leading-relaxed">
-                        This repository has {density.totalReviews || 0} reviewed PRs with {density.totalComments || 0} total comments. Average of {density.avgCommentsPerPR || 0} comments per PR. Focus on code clarity to reduce comment density.
-                      </p>
-                    </div>
+                    {issueTriage && issueTriage.totalIssuesTriaged > 0 && (
+                      <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 p-6 hover:border-white/20 hover:shadow-[0_8_32px_rgba(255,255,255,0.1)] transition-all animate-fadeInUp">
+                        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                          <Tag className="w-5 h-5" />
+                          Issue Triage Analysis
+                        </h2>
+
+                        <div className="grid md:grid-cols-2 gap-6">
+                          <div>
+                            <p className="text-gray-400 text-sm mb-2">Total Issues</p>
+                            <p className="text-4xl font-bold text-white">{issueTriage.totalIssuesTriaged || 0}</p>
+                          </div>
+
+                          <div>
+                            <p className="text-gray-400 text-sm mb-2">Avg Labels per Issue</p>
+                            <p className="text-4xl font-bold text-white">
+                              {issueTriage.avgLabelsPerIssue || '0'}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-gray-400 text-sm mb-2">Total Labels</p>
+                            <p className="text-2xl font-bold text-white">{issueTriage.totalLabelsApplied || 0}</p>
+                          </div>
+
+                          <div>
+                            <p className="text-gray-400 text-sm mb-2">Recent Activity</p>
+                            <p className="text-2xl font-bold text-white">{issueTriage.recentTriages?.length || 0}</p>
+                          </div>
+
+                          <div className="md:col-span-2">
+                            <p className="text-gray-400 text-sm mb-3">Most Recent Issue</p>
+                            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                              <p className="text-white font-mono text-sm break-words">
+                                {issueTriage.recentTriages?.[0]?.issueNumber ? `Issue #${issueTriage.recentTriages[0].issueNumber}` : 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                   </>
                 ) : null}
               </div>

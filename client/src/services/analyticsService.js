@@ -118,3 +118,18 @@ export const getConfidenceDistribution = async (repoId) => {
     return {};
   }
 };
+
+/**
+ * Get issue triage analysis for a repository
+ * @param {string} repoId - Repository ID
+ * @returns {Promise<Object>} Issue triage analysis data
+ */
+export const getIssueTriageAnalysis = async (repoId) => {
+  try {
+    const response = await api.get(`/api/analytics/repo/${encodeURIComponent(repoId)}/issues`);
+    return response.data || {};
+  } catch (error) {
+    console.error('Error fetching issue triage analysis:', error);
+    return {};
+  }
+};

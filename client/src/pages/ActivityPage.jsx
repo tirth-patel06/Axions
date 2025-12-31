@@ -1,4 +1,4 @@
-import { Activity, Clock, GitPullRequest } from 'lucide-react';
+import { Activity, Clock, GitPullRequest, Tag } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { useRecentActivity } from '../hooks/useAnalyticsData';
 
@@ -57,7 +57,7 @@ export default function ActivityPage() {
             <div className="space-y-4">
               {activities.map((activity, idx) => (
                 <div
-                  key={activity._id || activity.prNumber || idx}
+                  key={activity._id || activity.prNumber || activity.issueNumber || idx}
                   className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 p-5 hover:border-white/20 hover:bg-white/10 hover:shadow-[0_4_16px_rgba(255,255,255,0.1)] transition-all duration-300 group cursor-pointer animate-fadeInUp"
                   style={{ animationDelay: `${idx * 0.05}s` }}
                 >
@@ -65,23 +65,39 @@ export default function ActivityPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="flex-shrink-0">
-                          <GitPullRequest className="w-5 h-5 text-white group-hover:scale-110 transition-transform" />
+                          {activity.type === 'issue_triage' ? (
+                            <Tag className="w-5 h-5 text-purple-400 group-hover:scale-110 transition-transform" />
+                          ) : (
+                            <GitPullRequest className="w-5 h-5 text-white group-hover:scale-110 transition-transform" />
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-white font-semibold truncate group-hover:text-gray-200 transition-colors">
-                            PR #{activity.prNumber}
+                            {activity.type === 'issue_triage' ? (
+                              `Issue #${activity.issueNumber}`
+                            ) : (
+                              `PR #${activity.prNumber}`
+                            )}
                           </p>
                           <p className="text-gray-500 text-sm">{activity.repo}</p>
                         </div>
                       </div>
 
                       <p className="text-gray-400 text-sm ml-8 mb-3">
-                        {activity.filesAnalyzed} files analyzed • {activity.commentsPosted} comments posted
+                        {activity.type === 'issue_triage' ? (
+                          `Issue analyzed • ${activity.labelsApplied?.length || 0} labels added`
+                        ) : (
+                          `${activity.filesAnalyzed} files analyzed • ${activity.commentsPosted} comments posted`
+                        )}
                       </p>
 
                       <div className="flex items-center gap-3 ml-8">
-                        <span className="text-xs font-semibold px-3 py-1 rounded-full border bg-blue-500/20 text-blue-200 border-blue-500/30">
-                          Reviewed
+                        <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+                          activity.type === 'issue_triage' 
+                            ? 'bg-purple-500/20 text-purple-200 border-purple-500/30' 
+                            : 'bg-blue-500/20 text-blue-200 border-blue-500/30'
+                        }`}>
+                          {activity.type === 'issue_triage' ? 'Triaged' : 'Reviewed'}
                         </span>
                         <span className="text-gray-500 text-xs flex items-center gap-1">
                           <Clock className="w-3 h-3" />

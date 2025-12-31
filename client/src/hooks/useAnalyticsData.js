@@ -11,7 +11,8 @@ import {
   getCommentDensity,
   getConfidenceDistribution,
   getErrorTrends,
-  getActivityHeatmap
+  getActivityHeatmap,
+  getIssueTriageAnalysis
 } from '../services/analyticsService';
 
 export function useUserSummary() {
@@ -167,7 +168,9 @@ export function useConfidenceDistribution(repoId) {
         setLoading(true);
         setError(null);
         const result = await getConfidenceDistribution(repoId);
-        setData(result || null);
+        // Map breakdown object to flat structure
+        const mapped = result?.breakdown ? result.breakdown : result;
+        setData(mapped || null);
       } catch (err) {
         console.error('Failed to fetch confidence:', err);
         setError('Failed to load confidence');
@@ -230,6 +233,37 @@ export function useActivityHeatmap(days = 90) {
     };
     fetch();
   }, [days]);
+
+  return { data, loading, error };
+}
+
+export function useIssueTriageAnalysis(repoId) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!repoId) {
+      setLoading(false);
+      return;
+    }
+
+    const fetch = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await getIssueTriageAnalysis(repoId);
+        setData(result || null);
+      } catch (err) {
+        console.error('Failed to fetch issue triage analysis:', err);
+        setError('Failed to load issue triage analysis');
+        setData(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetch();
+  }, [repoId]);
 
   return { data, loading, error };
 }

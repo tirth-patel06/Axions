@@ -275,25 +275,51 @@ async function getReviewTimeSeries({ userId, repoId = null, days = 30 }) {
 
 /**
  * Get recent activity feed (for dashboard "Recent Activity" section)
+ * Includes both PR reviews and issue triages in unified list
  * @param {string} userId - User MongoDB ObjectId
  * @param {number} limit - Max items to return (default 20)
- * @returns {Promise<Array>} Recent PRs: [{ repo, prNumber, filesAnalyzed, commentsPosted, createdAt }]
+ * @returns {Promise<Array>} Recent activity: [{ type, repo, prNumber?, issueNumber?, ..., createdAt }]
  */
 async function getRecentActivity({ userId, limit = 20 }) {
   try {
-    const reviews = await PullRequestReview.find({ userId })
-      .select('owner repo pull_number filesAnalyzed commentsPosted createdAt')
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean();
+    // Get both PR reviews and issue triages
+    const [reviews, triages] = await Promise.all([
+      PullRequestReview.find({ userId })
+        .select('owner repo pull_number filesAnalyzed commentsPosted createdAt')
+        .sort({ createdAt: -1 })
+        .lean(),
+      IssueTriage.find({ userId })
+        .select('owner repo issue_number labelsApplied summary createdAt')
+        .sort({ createdAt: -1 })
+        .lean()
+    ]);
 
-    return reviews.map(r => ({
+    // Map PR reviews with type indicator
+    const reviewActivities = reviews.map(r => ({
+      type: 'pr_review',
       repo: `${r.owner}/${r.repo}`,
       prNumber: r.pull_number,
       filesAnalyzed: r.filesAnalyzed || 0,
       commentsPosted: r.commentsPosted || 0,
       createdAt: r.createdAt
     }));
+
+    // Map issue triages with type indicator
+    const triageActivities = triages.map(t => ({
+      type: 'issue_triage',
+      repo: `${t.owner}/${t.repo}`,
+      issueNumber: t.issue_number,
+      labelsApplied: t.labelsApplied || [],
+      summary: t.summary || '',
+      createdAt: t.createdAt
+    }));
+
+    // Combine and sort by date, then limit
+    const combined = [...reviewActivities, ...triageActivities]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, limit);
+
+    return combined;
   } catch (error) {
     console.error("❌ Failed to get recent activity:", error.message);
     return [];
@@ -318,6 +344,7 @@ async function getUserSummary({ userId }) {
     const totalPRsReviewed = repoStats.reduce((sum, s) => sum + (s.totalPRsReviewed || 0), 0);
     const totalInlineComments = repoStats.reduce((sum, s) => sum + (s.totalInlineComments || 0), 0);
     const totalIssuesTriaged = repoStats.reduce((sum, s) => sum + (s.totalIssuesTriaged || 0), 0);
+    const totalLabelsApplied = repoStats.reduce((sum, s) => sum + (s.totalLabelsApplied || 0), 0);
     const totalErrors = repoStats.reduce((sum, s) => sum + (s.totalErrors || 0), 0);
 
     return {
@@ -325,6 +352,7 @@ async function getUserSummary({ userId }) {
       totalPRsReviewed,
       totalInlineComments,
       totalIssuesTriaged,
+      totalLabelsApplied,
       totalErrors,
       avgCommentsPerPR: totalPRsReviewed > 0 ? (totalInlineComments / totalPRsReviewed).toFixed(1) : 0
     };
@@ -501,16 +529,20 @@ async function getRepoComparison({ userId }) {
       .lean();
 
     return stats
-      .filter(s => s.totalPRsReviewed > 0) // Only include repos with actual data
+      .filter(s => s.totalPRsReviewed > 0 || s.totalIssuesTriaged > 0) // Include repos with PR or issue activity
       .map(s => ({
         repoId: s.repoId?._id,
         repo: s.repoId?.fullName || 'Unknown',
         totalPRsReviewed: s.totalPRsReviewed || 0,
         totalInlineComments: s.totalInlineComments || 0,
         totalIssuesTriaged: s.totalIssuesTriaged || 0,
+        totalLabelsApplied: s.totalLabelsApplied || 0,
         lastActivityAt: s.lastActivityAt,
         avgCommentsPerPR: s.totalPRsReviewed > 0 
           ? (s.totalInlineComments / s.totalPRsReviewed).toFixed(1) 
+          : 0,
+        avgLabelsPerIssue: s.totalIssuesTriaged > 0
+          ? (s.totalLabelsApplied / s.totalIssuesTriaged).toFixed(1)
           : 0
       }))
       .sort((a, b) => (b.totalPRsReviewed || 0) - (a.totalPRsReviewed || 0));

@@ -5,7 +5,7 @@ import MetricCard from '../components/MetricCard';
 import { useRepoComparison } from '../hooks/useAnalyticsData';
 
 export default function RepoComparisonPage() {
-  const [sortBy, setSortBy] = useState('prs');
+  const [sortBy, setSortBy] = useState('name');
   const { data: repos, loading, error } = useRepoComparison();
 
   const sortedRepos = [...repos].sort((a, b) => {
@@ -14,10 +14,8 @@ export default function RepoComparisonPage() {
         return (a.repo || '').localeCompare(b.repo || '');
       case 'prs':
         return (b.totalPRsReviewed || 0) - (a.totalPRsReviewed || 0);
-      case 'reviewTime':
-        return (a.avgCommentsPerPR || 0) - (b.avgCommentsPerPR || 0);
-      case 'successRate':
-        return (b.totalInlineComments || 0) - (a.totalInlineComments || 0);
+      case 'issues':
+        return (b.totalIssuesTriaged || 0) - (a.totalIssuesTriaged || 0);
       default:
         return 0;
     }
@@ -51,12 +49,14 @@ export default function RepoComparisonPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-sm hover:bg-white/20 transition-all"
+                className="bg-black/70 border border-white/10 rounded-lg px-3 py-2 text-white text-sm hover:bg-black/80 transition-all cursor-pointer"
+                style={{
+                  colorScheme: 'dark'
+                }}
               >
-                <option value="prs">Total PRs</option>
-                <option value="reviewTime">Review Time (fastest first)</option>
-                <option value="successRate">Success Rate</option>
-                <option value="name">Repository Name</option>
+                <option value="name" className="bg-black text-white">Repository Name</option>
+                <option value="prs" className="bg-black text-white">Total PRs</option>
+                <option value="issues" className="bg-black text-white">Total Issues</option>
               </select>
             </div>
             <p className="text-gray-400 text-sm">{repos.length} repositories</p>

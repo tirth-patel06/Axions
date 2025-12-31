@@ -78,11 +78,12 @@ export default function ErrorTrackingPage() {
               <select
                 value={days}
                 onChange={(e) => setDays(Number(e.target.value))}
-                className="bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-sm hover:bg-white/20 transition-all"
+                className="bg-black/70 border border-white/10 rounded-lg px-3 py-2 text-white text-sm hover:bg-black/80 transition-all cursor-pointer"
+                style={{ colorScheme: 'dark' }}
               >
-                <option value={7}>Last 7 days</option>
-                <option value={30}>Last 30 days</option>
-                <option value={90}>Last 90 days</option>
+                <option value={7} className="bg-black text-white">Last 7 days</option>
+                <option value={30} className="bg-black text-white">Last 30 days</option>
+                <option value={90} className="bg-black text-white">Last 90 days</option>
               </select>
             </div>
 

@@ -22,13 +22,12 @@ const app = express();
 // ============================================
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 const CORS_CREDENTIALS = process.env.CORS_CREDENTIALS === "true";
-const LOG_LEVEL = process.env.LOG_LEVEL || "dev";
 const NODE_ENV = process.env.NODE_ENV || "development";
 
 // ============================================
 // Middleware Configuration
 // ============================================
-app.use(morgan(LOG_LEVEL));
+app.use(morgan("dev"));
 app.use(cors({ 
   origin: FRONTEND_URL, 
   credentials: CORS_CREDENTIALS 

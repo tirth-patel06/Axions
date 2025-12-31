@@ -20,7 +20,9 @@ export default function ErrorTrackingPage() {
         {recentErrors.map((errorItem, idx) => (
           <div key={idx} className="flex items-start gap-4">
             <div className="flex-shrink-0 w-32">
-              <p className="text-gray-400 text-sm font-mono truncate">{errorItem.repo || 'Unknown'}</p>
+              <p className="text-gray-400 text-sm font-mono truncate">
+                {errorItem.repo ? errorItem.repo.split('/')[1] || errorItem.repo : 'Unknown'}
+              </p>
             </div>
             <div className="flex-1">
               <div className="flex items-center justify-between mb-1">

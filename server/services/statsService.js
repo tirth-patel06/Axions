@@ -413,8 +413,8 @@ async function getErrorRateTrends({ userId, days = 30 }) {
     const totalEvents = errors + reviews;
     const errorRate = totalEvents > 0 ? ((errors / totalEvents) * 100).toFixed(2) : 0;
 
-    // Get recent errors for debugging
-    const recentErrors = await ErrorLog.find({ userId })
+    // Get recent errors for debugging - filtered by time period
+    const recentErrors = await ErrorLog.find({ userId, createdAt: { $gte: startDate } })
       .select('owner repo pull_number error createdAt')
       .sort({ createdAt: -1 })
       .limit(5)

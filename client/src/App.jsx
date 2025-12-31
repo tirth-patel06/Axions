@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import HeroPage from './pages/HeroPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import SuccessPage from './pages/SuccessPage.jsx';
@@ -9,6 +9,7 @@ import ActivityPage from './pages/ActivityPage.jsx';
 import RepoComparisonPage from './pages/RepoComparisonPage.jsx';
 import DeepAnalysisPage from './pages/DeepAnalysisPage.jsx';
 import ErrorTrackingPage from './pages/ErrorTrackingPage.jsx';
+import NotFoundPage from './pages/NotFoundPage.jsx';
 
 function App() {
   return (
@@ -23,7 +24,7 @@ function App() {
       <Route path="/analysis" element={<DeepAnalysisPage />} />
       <Route path="/errors" element={<ErrorTrackingPage />} />
       <Route path="/repositories" element={<RepositoriesPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }

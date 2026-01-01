@@ -27,7 +27,7 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 // ============================================
 // Middleware Configuration
 // ============================================
-app.use(morgan("dev"));
+app.use(morgan(NODE_ENV === "production" ? "combined" : "dev"));
 app.use(cors({ 
   origin: FRONTEND_URL, 
   credentials: true
@@ -54,7 +54,7 @@ app.use("/api/issues", issuesRoutes);
 // ============================================
 // Health Check Endpoint
 // ============================================
-app.get("/health", (req, res) => {
+app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "healthy",
     environment: NODE_ENV,

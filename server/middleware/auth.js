@@ -3,6 +3,11 @@ const User = require("../models/User");
 const connectDB = require("../lib/mongoose");
 
 async function authMiddleware(req, res, next) {
+  console.log("AUTH MIDDLEWARE HIT", {
+    cookies: req.cookies,
+    path: req.path,
+  });
+
   try {
     await connectDB();
 

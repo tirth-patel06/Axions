@@ -4,8 +4,17 @@ const { orchestrateReview } = require("../services/reviewService");
 const { generateIssueLabels, generateIssueSummary } = require("../services/llmService");
 const { applyColoredLabels, postIssueSummaryComment } = require("../services/githubService");
 const IssueTriage = require("../models/IssueTriage");
-const { Octokit } = require("@octokit/rest");
 const statsService = require("../services/statsService");
+
+let Octokit;
+
+async function getOctokit() {
+  if (!Octokit) {
+    const mod = await import("@octokit/rest");
+    Octokit = mod.Octokit;
+  }
+  return Octokit;
+}
 
 /**
  * Orchestrates the issue labeling and summarization process
@@ -22,8 +31,9 @@ async function orchestrateIssueLabeling(payload, connectedRepo) {
       repository: { owner: { login: owner }, name: repo },
     } = payload;
 
+    const OctokitClient = await getOctokit();
     // Create Octokit instance with the user's GitHub access token
-    const octokit = new Octokit({ auth: connectedRepo.userId.accessToken });
+    const octokit = new OctokitClient({ auth: connectedRepo.userId.accessToken });
 
     // Step 1: Generate labels using LLM (if feature is enabled)
     if (process.env.FEATURE_ISSUE_LABELING === "true" || process.env.ENABLE_AUTO_LABELS === "true") {

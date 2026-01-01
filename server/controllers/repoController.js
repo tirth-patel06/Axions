@@ -1,6 +1,15 @@
 const ConnectedRepo = require("../models/ConnectedRepo");
-const { Octokit } = require("@octokit/rest");
 const crypto = require("crypto");
+
+let Octokit;
+
+async function getOctokit() {
+  if (!Octokit) {
+    const mod = await import("@octokit/rest");
+    Octokit = mod.Octokit;
+  }
+  return Octokit;
+}
 
 /*POST /api/repos/connect*/
 async function connectRepo(req, res) {
@@ -39,7 +48,8 @@ async function connectRepo(req, res) {
     }
 
     // create webhook on GitHub
-    const octokit = new Octokit({ auth: user.accessToken });
+    const OctokitClient = await getOctokit();
+    const octokit = new OctokitClient({ auth: user.accessToken });
     const webhookSecret = crypto.randomBytes(32).toString("hex");
 
     const webhook = await octokit.rest.repos.createWebhook({
@@ -178,7 +188,8 @@ async function disconnectRepo(req, res) {
     console.log('Found connected repo:', connectedRepo.fullName);
 
     // Delete webhook from GitHub
-    const octokit = new Octokit({ auth: user.accessToken });
+    const OctokitClient = await getOctokit();
+    const octokit = new OctokitClient({ auth: user.accessToken });
     try {
       if (connectedRepo.webhookId) {
         await octokit.rest.repos.deleteWebhook({

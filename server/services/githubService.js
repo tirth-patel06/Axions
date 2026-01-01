@@ -1,5 +1,14 @@
-const { Octokit } = require("@octokit/rest");
 const parseDiff = require('parse-diff');
+
+let Octokit;
+
+async function getOctokit() {
+  if (!Octokit) {
+    const mod = await import("@octokit/rest");
+    Octokit = mod.Octokit;
+  }
+  return Octokit;
+}
 
 /**
  * Maps label names to GitHub label colors
@@ -84,7 +93,8 @@ function getLabelColor(label) {
  */
 async function fetchDiff(owner, repo, pull_number, userToken) {
   try {
-    const octokit = new Octokit({ auth: userToken });
+    const OctokitClient = await getOctokit();
+    const octokit = new OctokitClient({ auth: userToken });
     
     const response = await octokit.pulls.get({
       owner,
@@ -135,7 +145,8 @@ async function fetchDiff(owner, repo, pull_number, userToken) {
  */
 async function postReview({ owner, repo, pull_number, commit_id, userToken, review }) {
   try {
-    const octokit = new Octokit({ auth: userToken });
+    const OctokitClient = await getOctokit();
+    const octokit = new OctokitClient({ auth: userToken });
     
     const response = await octokit.pulls.createReview({
       owner,
@@ -168,7 +179,8 @@ async function postReview({ owner, repo, pull_number, commit_id, userToken, revi
  */
 async function postErrorComment({ owner, repo, pull_number, userToken, message }) {
   try {
-    const octokit = new Octokit({ auth: userToken });
+    const OctokitClient = await getOctokit();
+    const octokit = new OctokitClient({ auth: userToken });
     
     const response = await octokit.issues.createComment({
       owner,
@@ -207,7 +219,8 @@ async function postErrorComment({ owner, repo, pull_number, userToken, message }
  */
 async function applyLabelsToIssue({ owner, repo, issue_number, userToken, labels }) {
   try {
-    const octokit = new Octokit({ auth: userToken });
+    const OctokitClient = await getOctokit();
+    const octokit = new OctokitClient({ auth: userToken });
     
     if (!labels || labels.length === 0) {
       console.log(`⚠️  No labels to apply to issue #${issue_number}`);

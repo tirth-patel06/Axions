@@ -1,7 +1,17 @@
 // routes/github.js
 const express = require("express");
-const { Octokit } = require("@octokit/rest");
 const auth = require("../middleware/auth");
+
+let Octokit;
+
+// Lazy-load Octokit to keep CommonJS and remain serverless-friendly
+async function getOctokit() {
+  if (!Octokit) {
+    const mod = await import("@octokit/rest");
+    Octokit = mod.Octokit;
+  }
+  return Octokit;
+}
 
 const router = express.Router();
 
@@ -14,7 +24,9 @@ router.get("/repos", auth, async (req, res) => {
       return res.status(401).json({ error: "GitHub token missing" });
     }
 
-    const octokit = new Octokit({
+    const OctokitClient = await getOctokit();
+
+    const octokit = new OctokitClient({
       auth: user.accessToken,
     });
 

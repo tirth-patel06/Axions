@@ -5,26 +5,25 @@ import Logo from '../components/Logo';
 
 export default function SuccessPage() {
   const navigate = useNavigate();
-  const [countdown, setCountdown] = useState(3);
+  const [countdown, setCountdown] = useState(2);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    const countdownInterval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(countdownInterval);
-          return 0;
-        }
-        return prev - 1;
-      });
+    const durationMs = 2000;
+    const redirectTimer = setTimeout(() => navigate('/dashboard'), durationMs);
+
+    // Smooth progress: transition from 0 to 100% over durationMs
+    const rafId = requestAnimationFrame(() => setProgress(100));
+
+    // Countdown ticks every second
+    const countdownTimer = setInterval(() => {
+      setCountdown((prev) => Math.max(0, prev - 1));
     }, 1000);
 
-    const redirectTimer = setTimeout(() => {
-      navigate('/dashboard');
-    }, 3000);
-
     return () => {
-      clearInterval(countdownInterval);
       clearTimeout(redirectTimer);
+      clearInterval(countdownTimer);
+      cancelAnimationFrame(rafId);
     };
   }, [navigate]);
 
@@ -55,8 +54,8 @@ export default function SuccessPage() {
             <div className="w-full max-w-xs">
               <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
                 <div
-                  className="h-full bg-white transition-all duration-1000"
-                  style={{ width: `${((3 - countdown) / 3) * 100}%` }}
+                  className="h-full bg-white"
+                  style={{ width: `${progress}%`, transition: 'width 2000ms ease-out' }}
                 />
               </div>
             </div>

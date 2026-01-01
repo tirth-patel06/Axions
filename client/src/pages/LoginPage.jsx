@@ -15,16 +15,9 @@ export default function LoginPage() {
         setStatus('Authenticating...');
         const { data } = await api.get('/api/test/me');
         if (data?.user) {
-          // Double-check session validity against a protected resource
-          setStatus('Validating permissions...');
-          try {
-            await api.get('/api/github/repos', { params: { per_page: 1 } });
-            setStatus('Session valid. Redirecting...');
-            redirectTimer = setTimeout(() => navigate('/dashboard'), 800);
-            return;
-          } catch {
-            // Token present but invalid for GitHub; re-authenticate
-          }
+          setStatus('Session valid. Redirecting...');
+          redirectTimer = setTimeout(() => navigate('/dashboard'), 500);
+          return;
         }
       } catch {
         // No valid session; proceed to OAuth
@@ -33,7 +26,7 @@ export default function LoginPage() {
       setStatus('Redirecting to GitHub...');
       redirectTimer = setTimeout(() => {
         window.location.href = `${API_BASE_URL}/api/auth/github`;
-      }, 1000);
+      }, 800);
     };
 
     checkSession();

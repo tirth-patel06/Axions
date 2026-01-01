@@ -6,7 +6,7 @@ async function authMiddleware(req, res, next) {
   try {
     await connectDB();
 
-    const token = req.cookies.jwt;
+    const token = req.cookies.token;
     if (!token) {
       return res.status(401).json({ error: "Not authenticated" });
     }

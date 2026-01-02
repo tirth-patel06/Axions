@@ -43,7 +43,9 @@ app.use(cookieParser());
 app.use(passport.initialize());
 
 // Webhooks need raw body for signature verification; register before express.json
+// Support both direct /webhooks (local) and /api/webhooks (Vercel routing)
 app.use("/webhooks", webhookRoutes);
+app.use("/api/webhooks", webhookRoutes);
 
 // JSON parsing for the rest of the API
 app.use(express.json());

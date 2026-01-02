@@ -11,7 +11,7 @@ export default function DashboardPage() {
   const [repositories, setRepositories] = useState([]);
   const [loading, setLoading] = useState(true);
   const { data: stats } = useUserSummary();
-  const { data: activities } = useRecentActivity(5);
+  const { data: activities } = useRecentActivity(4);
 
   useEffect(() => {
     fetchDashboardData();

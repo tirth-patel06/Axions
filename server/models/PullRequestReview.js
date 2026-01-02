@@ -21,5 +21,6 @@ const pullRequestReviewSchema = new mongoose.Schema(
 );
 
 pullRequestReviewSchema.index({ githubRepoId: 1, pull_number: 1 });
+pullRequestReviewSchema.index({ githubRepoId: 1, pull_number: 1, commit_id: 1 }, { unique: true });
 
 module.exports = mongoose.model('PullRequestReview', pullRequestReviewSchema);

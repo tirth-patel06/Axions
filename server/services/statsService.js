@@ -37,54 +37,83 @@ const IssueTriage = require("../models/IssueTriage");
  */
 async function recordReview({ owner, repo, githubRepoId, pull_number, commit_id, analysis, user, repoId }) {
   try {
-    // Persist review document
-    const saved = await PullRequestReview.create({
-      owner,
-      repo,
-      githubRepoId,
-      pull_number,
-      commit_id,
-      userId: user._id,
-      repoId,
-      filesAnalyzed: analysis?.filesAnalyzed?.length || 0,
-      commentsPosted: analysis?.inlineComments?.length || 0,
-      confidence: analysis?.confidence || "unknown",
-      analysis,
-      analyzedAt: new Date()
-    });
-
-    // Update ConnectedRepo counters atomically (compat)
-    await ConnectedRepo.findByIdAndUpdate(
-      repoId,
+    const inlineCount = analysis?.inlineComments?.length || 0;
+    
+    // Use upsert to prevent duplicate reviews for same PR+commit
+    const result = await PullRequestReview.findOneAndUpdate(
+      { githubRepoId, pull_number, commit_id },
       {
-        $inc: {
-          reviewCount: 1,
-          totalCommentsPosted: analysis?.inlineComments?.length || 0
+        $setOnInsert: {
+          owner,
+          repo,
+          githubRepoId,
+          pull_number,
+          commit_id,
+          userId: user._id,
+          repoId,
+          analyzedAt: new Date()
         },
         $set: {
-          lastReviewedAt: new Date()
+          filesAnalyzed: analysis?.filesAnalyzed?.length || 0,
+          commentsPosted: inlineCount,
+          confidence: analysis?.confidence || "unknown",
+          analysis
         }
       },
-      { new: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+    
+    // Check if this was a new record (upserted) or existing (updated)
+    const isNewRecord = !result.updatedAt || result.createdAt.getTime() === result.updatedAt.getTime();
+    
+    if (isNewRecord) {
+      // Only increment counters for NEW reviews
+      await ConnectedRepo.findByIdAndUpdate(
+        repoId,
+        {
+          $inc: {
+            reviewCount: 1,
+            totalCommentsPosted: inlineCount
+          },
+          $set: {
+            lastReviewedAt: new Date()
+          }
+        },
+        { new: true }
+      );
 
-    // Upsert aggregated RepoStats (fast reads)
-    const inlineCount = analysis?.inlineComments?.length || 0;
-    await RepoStats.findOneAndUpdate(
-      { repoId },
-      {
-        $setOnInsert: { repoId, githubRepoId, userId: user._id },
-        $inc: {
-          totalPRsReviewed: 1,
-          totalInlineComments: inlineCount,
+      // Upsert aggregated RepoStats (fast reads)
+      await RepoStats.findOneAndUpdate(
+        { repoId },
+        {
+          $setOnInsert: { repoId, githubRepoId, userId: user._id },
+          $inc: {
+            totalPRsReviewed: 1,
+            totalInlineComments: inlineCount,
+          },
+          $set: {
+            lastPRReviewedAt: new Date(),
+            lastActivityAt: new Date(),
+          },
         },
-        $set: {
-          lastPRReviewedAt: new Date(),
-          lastActivityAt: new Date(),
+        { upsert: true, new: true }
+      );
+    } else {
+      // Update timestamps only for existing reviews
+      await RepoStats.findOneAndUpdate(
+        { repoId },
+        {
+          $setOnInsert: { repoId, githubRepoId, userId: user._id },
+          $set: {
+            lastPRReviewedAt: new Date(),
+            lastActivityAt: new Date(),
+          },
         },
-      },
-      { upsert: true, new: true }
-    );
+        { upsert: true }
+      );
+    }
+    
+    const saved = result;
 
     console.log(`✅ Recorded review stats: ${owner}/${repo}#${pull_number}`);
     return saved;
@@ -197,32 +226,63 @@ async function recordError({ owner, repo, githubRepoId, pull_number, error, user
  */
 async function recordIssueTriage({ owner, repo, githubRepoId, issue_number, user, labelsApplied = [], summary = "", repoId }) {
   try {
-    await IssueTriage.create({
-      owner,
-      repo,
-      githubRepoId,
-      issue_number,
-      userId: user._id,
-      repoId,
-      labelsApplied,
-      summary,
-    });
-
-    await RepoStats.findOneAndUpdate(
-      { repoId },
+    const uniqueLabels = new Set(labelsApplied);
+    const labelCount = uniqueLabels.size;
+    
+    // Use upsert to prevent duplicate issue triage records
+    const result = await IssueTriage.findOneAndUpdate(
+      { githubRepoId, issue_number },
       {
-        $setOnInsert: { repoId, githubRepoId, userId: user._id },
-        $inc: {
-          totalIssuesTriaged: 1,
-          totalLabelsApplied: Array.isArray(labelsApplied) ? labelsApplied.length : 0,
+        $setOnInsert: {
+          owner,
+          repo,
+          githubRepoId,
+          issue_number,
+          userId: user._id,
+          repoId
         },
         $set: {
-          lastIssueTriagedAt: new Date(),
-          lastActivityAt: new Date(),
-        },
+          labelsApplied,
+          summary
+        }
       },
-      { upsert: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+    
+    // Check if this was a new record (upserted) or existing (updated)
+    const isNewRecord = !result.updatedAt || result.createdAt.getTime() === result.updatedAt.getTime();
+    
+    if (isNewRecord) {
+      // Only increment counters for NEW issue triages
+      await RepoStats.findOneAndUpdate(
+        { repoId },
+        {
+          $setOnInsert: { repoId, githubRepoId, userId: user._id },
+          $inc: {
+            totalIssuesTriaged: 1,
+            totalLabelsApplied: labelCount,
+          },
+          $set: {
+            lastIssueTriagedAt: new Date(),
+            lastActivityAt: new Date(),
+          },
+        },
+        { upsert: true }
+      );
+    } else {
+      // Update timestamps only for existing issue triages
+      await RepoStats.findOneAndUpdate(
+        { repoId },
+        {
+          $setOnInsert: { repoId, githubRepoId, userId: user._id },
+          $set: {
+            lastIssueTriagedAt: new Date(),
+            lastActivityAt: new Date(),
+          },
+        },
+        { upsert: true }
+      );
+    }
 
     console.log(`✅ Recorded issue triage: ${owner}/${repo}#${issue_number}`);
   } catch (error) {
@@ -486,7 +546,8 @@ async function rebuildRepoStats({ userId }) {
       }
       const stat = statsMap.get(repoIdStr);
       stat.totalIssuesTriaged++;
-      stat.totalLabelsApplied += Array.isArray(t.labelsApplied) ? t.labelsApplied.length : 0;
+      const uniqueLabels = new Set(t.labelsApplied);
+      stat.totalLabelsApplied += uniqueLabels.size;
     });
 
     // Bulk update all RepoStats

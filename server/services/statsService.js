@@ -38,8 +38,11 @@ const IssueTriage = require("../models/IssueTriage");
 async function recordReview({ owner, repo, githubRepoId, pull_number, commit_id, analysis, user, repoId }) {
   try {
     const inlineCount = analysis?.inlineComments?.length || 0;
+    // Total comments = 1 (review body) + inline comments
+    const totalComments = 1 + inlineCount;
     
     // Use upsert to prevent duplicate reviews for same PR+commit
+    // CRITICAL: commentsPosted is ONLY set on insert (locked forever after first write)
     const result = await PullRequestReview.findOneAndUpdate(
       { githubRepoId, pull_number, commit_id },
       {
@@ -51,12 +54,15 @@ async function recordReview({ owner, repo, githubRepoId, pull_number, commit_id,
           commit_id,
           userId: user._id,
           repoId,
-          analyzedAt: new Date()
+          analyzedAt: new Date(),
+          // Lock commentsPosted on first insert - never update again
+          // Includes: 1 review body comment + N inline comments
+          commentsPosted: totalComments,
+          filesAnalyzed: analysis?.filesAnalyzed?.length || 0,
+          confidence: analysis?.confidence || "unknown"
         },
         $set: {
-          filesAnalyzed: analysis?.filesAnalyzed?.length || 0,
-          commentsPosted: inlineCount,
-          confidence: analysis?.confidence || "unknown",
+          // Only update analysis data, NOT counts
           analysis
         }
       },
@@ -67,51 +73,19 @@ async function recordReview({ owner, repo, githubRepoId, pull_number, commit_id,
     const isNewRecord = !result.updatedAt || result.createdAt.getTime() === result.updatedAt.getTime();
     
     if (isNewRecord) {
-      // Only increment counters for NEW reviews
+      // Update ConnectedRepo counters (for backward compat)
       await ConnectedRepo.findByIdAndUpdate(
         repoId,
         {
-          $inc: {
-            reviewCount: 1,
-            totalCommentsPosted: inlineCount
-          },
-          $set: {
-            lastReviewedAt: new Date()
-          }
+          $inc: { reviewCount: 1 },
+          $set: { lastReviewedAt: new Date() }
         },
         { new: true }
       );
-
-      // Upsert aggregated RepoStats (fast reads)
-      await RepoStats.findOneAndUpdate(
-        { repoId },
-        {
-          $setOnInsert: { repoId, githubRepoId, userId: user._id },
-          $inc: {
-            totalPRsReviewed: 1,
-            totalInlineComments: inlineCount,
-          },
-          $set: {
-            lastPRReviewedAt: new Date(),
-            lastActivityAt: new Date(),
-          },
-        },
-        { upsert: true, new: true }
-      );
-    } else {
-      // Update timestamps only for existing reviews
-      await RepoStats.findOneAndUpdate(
-        { repoId },
-        {
-          $setOnInsert: { repoId, githubRepoId, userId: user._id },
-          $set: {
-            lastPRReviewedAt: new Date(),
-            lastActivityAt: new Date(),
-          },
-        },
-        { upsert: true }
-      );
     }
+    
+    // NO RepoStats mutation here - rebuildRepoStats() is the single source of truth
+    // This prevents $inc corruption from webhooks, retries, and LLM hallucinations
     
     const saved = result;
 
@@ -226,10 +200,8 @@ async function recordError({ owner, repo, githubRepoId, pull_number, error, user
  */
 async function recordIssueTriage({ owner, repo, githubRepoId, issue_number, user, labelsApplied = [], summary = "", repoId }) {
   try {
-    const uniqueLabels = new Set(labelsApplied);
-    const labelCount = uniqueLabels.size;
-    
     // Use upsert to prevent duplicate issue triage records
+    // CRITICAL: labelsApplied is ONLY set on insert (locked forever after first triage)
     const result = await IssueTriage.findOneAndUpdate(
       { githubRepoId, issue_number },
       {
@@ -239,12 +211,12 @@ async function recordIssueTriage({ owner, repo, githubRepoId, issue_number, user
           githubRepoId,
           issue_number,
           userId: user._id,
-          repoId
-        },
-        $set: {
+          repoId,
+          // Lock labels on first insert - never update again
           labelsApplied,
           summary
         }
+        // NO $set - if issue already triaged, we don't re-triage
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
@@ -252,37 +224,14 @@ async function recordIssueTriage({ owner, repo, githubRepoId, issue_number, user
     // Check if this was a new record (upserted) or existing (updated)
     const isNewRecord = !result.updatedAt || result.createdAt.getTime() === result.updatedAt.getTime();
     
-    if (isNewRecord) {
-      // Only increment counters for NEW issue triages
-      await RepoStats.findOneAndUpdate(
-        { repoId },
-        {
-          $setOnInsert: { repoId, githubRepoId, userId: user._id },
-          $inc: {
-            totalIssuesTriaged: 1,
-            totalLabelsApplied: labelCount,
-          },
-          $set: {
-            lastIssueTriagedAt: new Date(),
-            lastActivityAt: new Date(),
-          },
-        },
-        { upsert: true }
-      );
-    } else {
-      // Update timestamps only for existing issue triages
-      await RepoStats.findOneAndUpdate(
-        { repoId },
-        {
-          $setOnInsert: { repoId, githubRepoId, userId: user._id },
-          $set: {
-            lastIssueTriagedAt: new Date(),
-            lastActivityAt: new Date(),
-          },
-        },
-        { upsert: true }
-      );
+    if (!isNewRecord) {
+      // Issue already triaged - do not update labels or stats
+      console.log(`⏭️  Issue #${issue_number} already triaged, skipping`);
+      return result;
     }
+    
+    // NO RepoStats mutation here - rebuildRepoStats() is the single source of truth
+    // This prevents $inc corruption from webhooks, retries, and label hallucinations
 
     console.log(`✅ Recorded issue triage: ${owner}/${repo}#${issue_number}`);
   } catch (error) {
@@ -522,13 +471,14 @@ async function rebuildRepoStats({ userId }) {
         statsMap.set(r.repoId.toString(), {
           repoId: r.repoId,
           totalPRsReviewed: 0,
-          totalInlineComments: 0,
+          totalInlineComments: 0,  // This now stores TOTAL comments (body + inline)
           totalIssuesTriaged: 0,
           totalLabelsApplied: 0
         });
       }
       const stat = statsMap.get(r.repoId.toString());
       stat.totalPRsReviewed++;
+      // commentsPosted already includes review body + inline comments
       stat.totalInlineComments += r.commentsPosted || 0;
     });
 

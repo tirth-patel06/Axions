@@ -11,6 +11,7 @@ import DeepAnalysisPage from './pages/DeepAnalysisPage.jsx';
 import ErrorTrackingPage from './pages/ErrorTrackingPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
+import PrivateRoute from './components/PrivateRoute.jsx';
 
 function App() {
   return (
@@ -18,14 +19,16 @@ function App() {
       <Route path="/" element={<HeroPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/success" element={<SuccessPage />} />
-      <Route path="/dashboard" element={<DashboardPage />} />
-      <Route path="/analytics" element={<AnalyticsPage />} />
-      <Route path="/activity" element={<ActivityPage />} />
-      <Route path="/repo-comparison" element={<RepoComparisonPage />} />
-      <Route path="/analysis" element={<DeepAnalysisPage />} />
-      <Route path="/errors" element={<ErrorTrackingPage />} />
-      <Route path="/profile" element={<ProfilePage />} />
-      <Route path="/repositories" element={<RepositoriesPage />} />
+      <Route element={<PrivateRoute />}> 
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/activity" element={<ActivityPage />} />
+        <Route path="/repo-comparison" element={<RepoComparisonPage />} />
+        <Route path="/analysis" element={<DeepAnalysisPage />} />
+        <Route path="/errors" element={<ErrorTrackingPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/repositories" element={<RepositoriesPage />} />
+      </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

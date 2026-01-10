@@ -25,11 +25,15 @@ export default function PrivateRoute({ children }) {
   }, []);
 
   if (isLoggedIn === null) {
-    return null;
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    );
   }
 
   if (isLoggedIn === false) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    return <Navigate to="/login" replace />;
   }
 
   if (children) {

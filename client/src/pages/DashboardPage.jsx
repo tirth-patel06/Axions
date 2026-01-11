@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { GitBranch, AlertCircle, Code2, Sparkles, ArrowRight, Globe, Lock, Loader2, TrendingUp, BarChart3, Tag, Bookmark} from 'lucide-react';
+import { GitBranch, AlertCircle, Code2, Sparkles, ArrowRight, Globe, Lock, Loader2, TrendingUp, BarChart3, Tag, Bookmark, RefreshCw } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import StatCard from '../components/StatCard';
 import { useUserSummary, useRecentActivity } from '../hooks/useAnalyticsData';
@@ -10,7 +10,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState(null);
   const [repositories, setRepositories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { data: stats } = useUserSummary();
+  const { data: stats, loading: statsLoading, error: statsError, refetch: refetchStats } = useUserSummary();
   const { data: activities } = useRecentActivity(4);
 
   useEffect(() => {
@@ -130,29 +130,46 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Stats Section with Error Handling */}
+          {statsError ? (
+            <div className="mb-12 p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 text-red-400" />
+                <span className="text-red-300">Failed to load dashboard statistics</span>
+              </div>
+              <button 
+                onClick={refetchStats}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white text-sm transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Retry
+              </button>
+            </div>
+          ) : null}
+          
           <div className="grid md:grid-cols-4 gap-6 mb-12">
             <StatCard
               icon={TrendingUp}
               label="Total PRs Reviewed"
-              value={stats?.totalPRsReviewed || 0}
+              value={statsLoading ? '...' : (stats?.totalPRsReviewed ?? 0)}
               color="bg-blue-500/20"
             />
             <StatCard
               icon={BarChart3}
               label="Total Comments"
-              value={stats?.totalInlineComments || 0}
+              value={statsLoading ? '...' : (stats?.totalInlineComments ?? 0)}
               color="bg-green-500/20"
             />
             <StatCard
               icon={Tag}
               label="Labels Added"
-              value={stats?.totalLabelsApplied || 0}
+              value={statsLoading ? '...' : (stats?.totalLabelsApplied ?? 0)}
               color="bg-purple-500/20"
             />
             <StatCard
               icon={Bookmark}
               label="Issues Triaged"
-              value={stats?.totalIssuesTriaged || 0}
+              value={statsLoading ? '...' : (stats?.totalIssuesTriaged ?? 0)}
               color="bg-purple-500/20"
             />
           </div>

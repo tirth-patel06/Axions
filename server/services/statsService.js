@@ -462,7 +462,7 @@ async function rebuildRepoStats({ userId }) {
     const triages = await IssueTriage.find({ userId })
       .select('repoId labelsApplied')
       .lean();
-
+          
     const statsMap = new Map();
     
     // Process PR reviews
@@ -503,9 +503,10 @@ async function rebuildRepoStats({ userId }) {
     // Bulk update all RepoStats
     for (const [repoIdStr, stat] of statsMap) {
       await RepoStats.findOneAndUpdate(
-        { repoId: stat.repoId },
+        { repoId: stat.repoId, userId },
         {
           $set: {
+            userId,
             totalPRsReviewed: stat.totalPRsReviewed,
             totalInlineComments: stat.totalInlineComments,
             totalIssuesTriaged: stat.totalIssuesTriaged,

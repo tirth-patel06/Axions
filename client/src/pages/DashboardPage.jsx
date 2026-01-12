@@ -10,29 +10,49 @@ export default function DashboardPage() {
   const [user, setUser] = useState(null);
   const [repositories, setRepositories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { data: stats, loading: statsLoading, error: statsError, refetch: refetchStats } = useUserSummary();
-  const { data: activities } = useRecentActivity(4);
+  const [isLoggedIn, setIsLoggedIn] = useState(null); // null = checking, true/false = known
+  
+  // Only fetch analytics data once we confirm user is logged in
+  const { data: stats, loading: statsLoading, error: statsError, refetch: refetchStats } = useUserSummary(isLoggedIn === true);
+  const { data: activities, refetch: refetchActivities } = useRecentActivity(4, isLoggedIn === true);
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
+  // Refetch analytics data when login status is confirmed
+  useEffect(() => {
+    if (isLoggedIn === true) {
+      refetchStats();
+      refetchActivities();
+    }
+  }, [isLoggedIn]);
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       
-      // Fetch all data in parallel
-      const [userRes, reposRes] = await Promise.all([
-        api.get('/api/test/me'),
-        api.get('/api/repos/connected')
-      ]);
-
-      setUser(userRes.data?.user);
+      // First check if user is logged in
+      const userRes = await api.get('/api/test/me');
+      console.log('User check response:', userRes.data);
       
-      const connectedRepos = reposRes.data?.repos || [];
-      setRepositories(connectedRepos.slice(0, 3)); // Show only 3 repos
+      // Check for user data - could be in .user or directly in data
+      const userData = userRes.data?.user || userRes.data;
+      
+      if (userData && (userData.githubId || userData.username)) {
+        setUser(userData);
+        setIsLoggedIn(true);
+        
+        // Fetch repos only if logged in
+        const reposRes = await api.get('/api/repos/connected');
+        const connectedRepos = reposRes.data?.repos || [];
+        setRepositories(connectedRepos.slice(0, 3));
+      } else {
+        setIsLoggedIn(false);
+      }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
+      setIsLoggedIn(false);
     } finally {
       setLoading(false);
     }
@@ -99,10 +119,61 @@ export default function DashboardPage() {
     </div>
   );
 
-  if (loading) {
+  if (loading || isLoggedIn === null) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-white animate-spin" />
+      </div>
+    );
+  }
+
+  // Guest view when not logged in
+  if (isLoggedIn === false) {
+    return (
+      <div className="min-h-screen bg-black relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 pointer-events-none" />
+        <Sidebar />
+        <div className="ml-64 relative">
+          <div className="max-w-7xl mx-auto px-6 py-8">
+            <div className="mb-12 animate-fadeInUp">
+              <h1 className="text-4xl font-bold text-white mb-2">Welcome to Axions</h1>
+              <p className="text-gray-400">AI-powered code review and issue triage for your repositories</p>
+            </div>
+            
+            <div className="bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 p-8 text-center">
+              <Sparkles className="w-16 h-16 text-white mx-auto mb-6 opacity-50" />
+              <h2 className="text-2xl font-bold text-white mb-4">Get Started with Axions</h2>
+              <p className="text-gray-400 mb-6 max-w-md mx-auto">
+                Connect your GitHub account to unlock AI-powered PR reviews, intelligent issue triage, and comprehensive analytics.
+              </p>
+              <Link 
+                to="/login" 
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white text-black rounded-lg font-semibold hover:bg-gray-200 transition-colors"
+              >
+                Sign in with GitHub
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+            
+            <div className="grid md:grid-cols-3 gap-6 mt-8">
+              <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6">
+                <TrendingUp className="w-8 h-8 text-blue-400 mb-4" />
+                <h3 className="text-white font-semibold mb-2">AI PR Reviews</h3>
+                <p className="text-gray-400 text-sm">Automated code review with intelligent inline comments</p>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6">
+                <Tag className="w-8 h-8 text-purple-400 mb-4" />
+                <h3 className="text-white font-semibold mb-2">Issue Triage</h3>
+                <p className="text-gray-400 text-sm">Auto-label and summarize issues with AI</p>
+              </div>
+              <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6">
+                <BarChart3 className="w-8 h-8 text-green-400 mb-4" />
+                <h3 className="text-white font-semibold mb-2">Analytics</h3>
+                <p className="text-gray-400 text-sm">Track review activity and repository health</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -186,7 +257,7 @@ export default function DashboardPage() {
                 <div className="space-y-3">
                   {activities && activities.length > 0 ? (
                     activities.map((activity, idx) => (
-                      <div key={activity._id || activity.prNumber || idx} style={{ animationDelay: `${idx * 0.1}s` }}>
+                      <div key={activity._id || `${activity.type}-${activity.prNumber || activity.issueNumber}-${idx}`} style={{ animationDelay: `${idx * 0.1}s` }}>
                         <ActivityItem activity={activity} />
                       </div>
                     ))

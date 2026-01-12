@@ -15,13 +15,18 @@ import {
   getIssueTriageAnalysis
 } from '../services/analyticsService';
 
-export function useUserSummary() {
+export function useUserSummary(enabled = true) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+    
     let isMounted = true;
     
     const fetchSummary = async () => {
@@ -67,7 +72,7 @@ export function useUserSummary() {
     return () => {
       isMounted = false;
     };
-  }, [refreshTrigger]);
+  }, [refreshTrigger, enabled]);
 
   const refetch = () => setRefreshTrigger(prev => prev + 1);
 
@@ -100,13 +105,19 @@ export function useReviewTimeSeries(days = 30) {
   return { data, loading, error };
 }
 
-export function useRecentActivity(limit = 20) {
+export function useRecentActivity(limit = 20, enabled = true) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
-    const fetch = async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+    
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
@@ -120,10 +131,12 @@ export function useRecentActivity(limit = 20) {
         setLoading(false);
       }
     };
-    fetch();
-  }, [limit]);
+    fetchData();
+  }, [limit, enabled, refreshTrigger]);
 
-  return { data, loading, error };
+  const refetch = () => setRefreshTrigger(prev => prev + 1);
+
+  return { data, loading, error, refetch };
 }
 
 export function useRepoComparison() {

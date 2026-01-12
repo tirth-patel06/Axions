@@ -19,7 +19,6 @@ function App() {
       <Route path="/" element={<HeroPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/success" element={<SuccessPage />} />
-      <Route element={<PrivateRoute />}> 
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/activity" element={<ActivityPage />} />
@@ -28,7 +27,6 @@ function App() {
         <Route path="/errors" element={<ErrorTrackingPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/repositories" element={<RepositoriesPage />} />
-      </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

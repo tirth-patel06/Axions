@@ -1,3 +1,6 @@
+// Load environment variables FIRST, before anything else
+require("dotenv").config();
+
 const app = require("./app");
 require("./lib/mongoose");
 

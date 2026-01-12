@@ -11,7 +11,6 @@ import DeepAnalysisPage from './pages/DeepAnalysisPage.jsx';
 import ErrorTrackingPage from './pages/ErrorTrackingPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
-import PrivateRoute from './components/PrivateRoute.jsx';
 
 function App() {
   return (

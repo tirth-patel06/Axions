@@ -37,7 +37,7 @@ export default function DashboardPage() {
       console.log('User check response:', userRes.data);
       
       // Check for user data - could be in .user or directly in data
-      const userData = userRes.data?.user || userRes.data;
+      const userData = userRes.data;
       
       if (userData && (userData.githubId || userData.username)) {
         setUser(userData);

@@ -36,6 +36,7 @@ router.get("/repo/:repoId/confidence", auth, getConfidenceDistribution);
 router.get("/errors/trends", auth, getErrorTrends);
 
 // Activity heatmap
+// Currently not using in Frontend
 router.get("/heatmap", auth, getActivityHeatmap);
 
 // Issue triage analytics

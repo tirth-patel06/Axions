@@ -3,11 +3,6 @@ const User = require("../models/User");
 const connectDB = require("../lib/mongoose");
 
 async function authMiddleware(req, res, next) {
-  console.log("AUTH MIDDLEWARE HIT", {
-    cookies: req.cookies,
-    path: req.path,
-  });
-
   try {
     await connectDB();
 
@@ -23,7 +18,7 @@ async function authMiddleware(req, res, next) {
       return res.status(401).json({ error: "User not found" });
     }
 
-    req.user = user; // 🔑 available to all protected routes
+    req.user = user; // available to all protected routes
     next();
   } catch (err) {
     return res.status(401).json({ error: "Invalid or expired token" });

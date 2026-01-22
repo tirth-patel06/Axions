@@ -277,7 +277,7 @@ async function getReviewTimeSeries({ userId, repoId = null, days = 30 }) {
 
     return Array.from(dailyMap.values());
   } catch (error) {
-    console.error("❌ Failed to get review time series:", error.message);
+    console.error("Failed to get review time series:", error.message);
     return [];
   }
 }
@@ -330,7 +330,7 @@ async function getRecentActivity({ userId, limit = 20 }) {
 
     return combined;
   } catch (error) {
-    console.error("❌ Failed to get recent activity:", error.message);
+    console.error("Failed to get recent activity:", error.message);
     return [];
   }
 }
@@ -366,7 +366,7 @@ async function getUserSummary({ userId }) {
       avgCommentsPerPR: totalPRsReviewed > 0 ? (totalInlineComments / totalPRsReviewed).toFixed(1) : 0
     };
   } catch (error) {
-    console.error("❌ Failed to get user summary:", error.message);
+    console.error("Failed to get user summary:", error.message);
     return null;
   }
 }
@@ -565,10 +565,10 @@ async function getRepoComparison({ userId }) {
 }
 
 /**
- * Get PR review heatmap data (for activity visualization)
+ * Get PR review and issue triage heatmap data (for activity visualization)
  * @param {string} userId - User MongoDB ObjectId
  * @param {number} days - Number of days to look back (default 90)
- * @returns {Promise<Array>} Daily activity: [{ date, count }] for calendar heatmap
+ * @returns {Promise<Array>} Daily activity: [{ date, reviewCount, triageCount, totalCount }] for calendar heatmap
  */
 async function getActivityHeatmap({ userId, days = 90 }) {
   try {
@@ -586,7 +586,45 @@ async function getActivityHeatmap({ userId, days = 90 }) {
       { $sort: { '_id': 1 } }
     ]);
 
-    return reviews.map(r => ({ date: r._id, count: r.count }));
+    const triages = await IssueTriage.aggregate([
+      { $match: { userId, createdAt: { $gte: startDate } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { '_id': 1 } }
+    ]);
+
+    // Merge both datasets by date
+    const activityMap = new Map();
+
+    reviews.forEach(r => {
+      activityMap.set(r._id, {
+        date: r._id,
+        reviewCount: r.count,
+        triageCount: 0,
+        count: r.count
+      });
+    });
+
+    triages.forEach(t => {
+      if (activityMap.has(t._id)) {
+        const day = activityMap.get(t._id);
+        day.triageCount = t.count;
+        day.totalCount += t.count;
+      } else {
+        activityMap.set(t._id, {
+          date: t._id,
+          reviewCount: 0,
+          triageCount: t.count,
+          count: t.count
+        });
+      }
+    });
+
+    return Array.from(activityMap.values()).sort((a, b) => a.date.localeCompare(b.date));
   } catch (error) {
     console.error("❌ Failed to get activity heatmap:", error.message);
     return [];

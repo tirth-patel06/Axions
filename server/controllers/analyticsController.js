@@ -36,7 +36,6 @@ async function getRecentActivity(req, res) {
     const activity = await statsService.getRecentActivity({ userId, limit });
     return res.json({ activity });
   } catch (error) {
-    console.error('Get recent activity error:', error);
     return res.status(500).json({ error: 'Failed to get recent activity' });
   }
 }

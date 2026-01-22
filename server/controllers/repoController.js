@@ -170,8 +170,6 @@ async function disconnectRepo(req, res) {
     const user = req.user;
     const { repoId } = req.params;
 
-    console.log('Disconnect request for repoId:', repoId);
-
     // Find repo (must belong to current user)
     const connectedRepo = await ConnectedRepo.findOne({
       _id: repoId,
@@ -185,8 +183,6 @@ async function disconnectRepo(req, res) {
       });
     }
 
-    console.log('Found connected repo:', connectedRepo.fullName);
-
     // Delete webhook from GitHub
     const OctokitClient = await getOctokit();
     const octokit = new OctokitClient({ auth: user.accessToken });
@@ -197,7 +193,6 @@ async function disconnectRepo(req, res) {
           repo: connectedRepo.name,
           hook_id: connectedRepo.webhookId,
         });
-        console.log(`✅ Webhook deleted for ${connectedRepo.fullName}`);
       }
     } catch (webhookErr) {
       // Log but don't fail - webhook might already be deleted
@@ -212,9 +207,7 @@ async function disconnectRepo(req, res) {
     connectedRepo.webhookSecret = null;
     connectedRepo.webhookId = null;
     await connectedRepo.save();
-
-    console.log('✅ Repository disconnected successfully');
-
+    
     return res.json({
       message: 'Repository disconnected successfully',
       repo: {

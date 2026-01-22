@@ -34,7 +34,6 @@ export default function DashboardPage() {
       
       // First check if user is logged in
       const userRes = await api.get('/api/test/me');
-      console.log('User check response:', userRes.data);
       
       // Check for user data - could be in .user or directly in data
       const userData = userRes.data;

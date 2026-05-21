@@ -99,60 +99,6 @@ async function recordReview({ owner, repo, githubRepoId, pull_number, commit_id,
 }
 
 /**
- * Increments review count for a repository
- * 
- * @param {string} repoId - MongoDB ObjectId of ConnectedRepo
- * @returns {Promise<void>}
- */
-// incrementReviewCount no longer needed (handled in recordReview)
-async function incrementReviewCount() {
-  return;
-}
-
-/**
- * Gets review statistics for a repository
- * 
- * @param {string} repoId - MongoDB ObjectId of ConnectedRepo
- * @returns {Promise<Object>} Statistics summary
- * 
- * @example
- * const stats = await getRepoStats(repoId);
- * // Returns: {
- * //   totalReviews: 10,
- * //   totalComments: 45,
- * //   averageCommentsPerReview: 4.5,
- * //   byCategory: {...},
- * //   lastReview: Date
- * // }
- */
-async function getRepoStats(repoId) {
-  try {
-    const stats = await RepoStats.findOne({ repoId }).lean();
-    if (!stats) {
-      return {
-        totalPRsReviewed: 0,
-        totalInlineComments: 0,
-        totalIssuesTriaged: 0,
-        totalLabelsApplied: 0,
-        totalErrors: 0,
-        lastActivityAt: null,
-      };
-    }
-    return {
-      totalPRsReviewed: stats.totalPRsReviewed || 0,
-      totalInlineComments: stats.totalInlineComments || 0,
-      totalIssuesTriaged: stats.totalIssuesTriaged || 0,
-      totalLabelsApplied: stats.totalLabelsApplied || 0,
-      totalErrors: stats.totalErrors || 0,
-      lastActivityAt: stats.lastActivityAt || null,
-    };
-  } catch (error) {
-    console.error("❌ Failed to get repo stats:", error.message);
-    return null;
-  }
-}
-
-/**
  * Records an analysis error
  * 
  * @param {Object} params - Parameters object
@@ -248,6 +194,8 @@ async function recordIssueTriage({ owner, repo, githubRepoId, issue_number, user
  * @param {string} userId - User MongoDB ObjectId
  * @param {string} repoId - Optional repo filter
  * @param {number} days - Number of days to look back (default 30)
+ * @param {number} page - Page number for recent errors (default 1)
+ * @param {number} perPage - Errors per page (default 10)
  * @returns {Promise<Array>} Daily activity data: [{ date, reviewCount, commentCount }]
  */
 async function getReviewTimeSeries({ userId, repoId = null, days = 30 }) {
@@ -407,32 +355,44 @@ async function getCommentDensityAnalysis({ repoId }) {
  * Get error rate trends (for reliability monitoring)
  * @param {string} userId - User MongoDB ObjectId
  * @param {number} days - Number of days to look back (default 30)
+ * @param {number} page - Number of page (default 1)
+ * @param {number} perPage - Number of log per page (default 10)
  * @returns {Promise<Object>} Error metrics
  */
-async function getErrorRateTrends({ userId, days = 30 }) {
+async function getErrorRateTrends({ userId, days = 30, page = 1, perPage = 10 }) {
   try {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const [errors, reviews] = await Promise.all([
+    const safePage = Number.isFinite(page) ? Math.max(page, 1) : 1;
+    const safePerPage = Number.isFinite(perPage) ? Math.max(perPage, 1) : 10;
+    const skip = (safePage - 1) * safePerPage;
+
+    const [errors, reviews, triages] = await Promise.all([
       ErrorLog.countDocuments({ userId, createdAt: { $gte: startDate } }),
-      PullRequestReview.countDocuments({ userId, createdAt: { $gte: startDate } })
+      PullRequestReview.countDocuments({ userId, createdAt: { $gte: startDate } }),
+      IssueTriage.countDocuments({ userId, createdAt: { $gte: startDate } })
     ]);
 
-    const totalEvents = errors + reviews;
+    const totalEvents = errors + reviews + triages;
     const errorRate = totalEvents > 0 ? ((errors / totalEvents) * 100).toFixed(2) : 0;
 
     // Get recent errors for debugging - filtered by time period
     const recentErrors = await ErrorLog.find({ userId, createdAt: { $gte: startDate } })
       .select('owner repo pull_number error createdAt')
       .sort({ createdAt: -1 })
-      .limit(5)
+      .skip(skip)
+      .limit(safePerPage)
       .lean();
 
     return {
       totalErrors: errors,
       totalReviews: reviews,
+      totalTriages: triages,
       errorRate: `${errorRate}%`,
+      page: safePage,
+      perPage: safePerPage,
+      totalPages: Math.max(Math.ceil(errors / safePerPage), 1),
       recentErrors: recentErrors.map(e => ({
         repo: `${e.owner}/${e.repo}`,
         prNumber: e.pull_number,
@@ -565,73 +525,6 @@ async function getRepoComparison({ userId }) {
 }
 
 /**
- * Get PR review and issue triage heatmap data (for activity visualization)
- * @param {string} userId - User MongoDB ObjectId
- * @param {number} days - Number of days to look back (default 90)
- * @returns {Promise<Array>} Daily activity: [{ date, reviewCount, triageCount, totalCount }] for calendar heatmap
- */
-async function getActivityHeatmap({ userId, days = 90 }) {
-  try {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    const reviews = await PullRequestReview.aggregate([
-      { $match: { userId, createdAt: { $gte: startDate } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { '_id': 1 } }
-    ]);
-
-    const triages = await IssueTriage.aggregate([
-      { $match: { userId, createdAt: { $gte: startDate } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { '_id': 1 } }
-    ]);
-
-    // Merge both datasets by date
-    const activityMap = new Map();
-
-    reviews.forEach(r => {
-      activityMap.set(r._id, {
-        date: r._id,
-        reviewCount: r.count,
-        triageCount: 0,
-        count: r.count
-      });
-    });
-
-    triages.forEach(t => {
-      if (activityMap.has(t._id)) {
-        const day = activityMap.get(t._id);
-        day.triageCount = t.count;
-        day.totalCount += t.count;
-      } else {
-        activityMap.set(t._id, {
-          date: t._id,
-          reviewCount: 0,
-          triageCount: t.count,
-          count: t.count
-        });
-      }
-    });
-
-    return Array.from(activityMap.values()).sort((a, b) => a.date.localeCompare(b.date));
-  } catch (error) {
-    console.error("❌ Failed to get activity heatmap:", error.message);
-    return [];
-  }
-}
-
-/**
  * Get confidence score distribution (for AI quality insights)
  * @param {string} repoId - Repository MongoDB ObjectId
  * @returns {Promise<Object>} Confidence breakdown
@@ -655,45 +548,6 @@ async function getConfidenceDistribution({ repoId }) {
   } catch (error) {
     console.error("❌ Failed to get confidence distribution:", error.message);
     return null;
-  }
-}
-
-/**
- * Get issue triage time series (for graphs)
- * @param {string} userId - User MongoDB ObjectId
- * @param {string} repoId - Optional repo filter
- * @param {number} days - Number of days to look back (default 30)
- * @returns {Promise<Array>} Daily triage data: [{ date, triageCount, labelsCount }]
- */
-async function getIssueTriageTimeSeries({ userId, repoId = null, days = 30 }) {
-  try {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    const query = { userId, createdAt: { $gte: startDate } };
-    if (repoId) query.repoId = repoId;
-
-    const triages = await IssueTriage.find(query)
-      .select('createdAt labelsApplied')
-      .sort({ createdAt: 1 })
-      .lean();
-
-    // Group by date
-    const dailyMap = new Map();
-    triages.forEach(t => {
-      const dateKey = t.createdAt.toISOString().split('T')[0];
-      if (!dailyMap.has(dateKey)) {
-        dailyMap.set(dateKey, { date: dateKey, triageCount: 0, labelsCount: 0 });
-      }
-      const day = dailyMap.get(dateKey);
-      day.triageCount++;
-      day.labelsCount += Array.isArray(t.labelsApplied) ? t.labelsApplied.length : 0;
-    });
-
-    return Array.from(dailyMap.values());
-  } catch (error) {
-    console.error("❌ Failed to get issue triage time series:", error.message);
-    return [];
   }
 }
 
@@ -740,45 +594,8 @@ async function getIssueTriageAnalysis({ repoId }) {
   }
 }
 
-/**
- * Get label distribution across triaged issues
- * @param {string} repoId - Repository MongoDB ObjectId
- * @returns {Promise<Object>} Label usage breakdown
- */
-async function getLabelDistribution({ repoId }) {
-  try {
-    const triages = await IssueTriage.find({ repoId })
-      .select('labelsApplied')
-      .lean();
-
-    const labelCounts = {};
-    triages.forEach(t => {
-      if (Array.isArray(t.labelsApplied)) {
-        t.labelsApplied.forEach(label => {
-          labelCounts[label] = (labelCounts[label] || 0) + 1;
-        });
-      }
-    });
-
-    // Sort by count descending
-    const sorted = Object.entries(labelCounts)
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count);
-
-    return {
-      totalLabels: Object.keys(labelCounts).length,
-      distribution: sorted
-    };
-  } catch (error) {
-    console.error("❌ Failed to get label distribution:", error.message);
-    return null;
-  }
-}
-
 module.exports = {
   recordReview,
-  incrementReviewCount,
-  getRepoStats,
   recordError,
   recordIssueTriage,
   rebuildRepoStats,
@@ -789,10 +606,7 @@ module.exports = {
   getCommentDensityAnalysis,
   getErrorRateTrends,
   getRepoComparison,
-  getActivityHeatmap,
   getConfidenceDistribution,
   // Issue triage analytics
-  getIssueTriageTimeSeries,
-  getIssueTriageAnalysis,
-  getLabelDistribution
+  getIssueTriageAnalysis
 };

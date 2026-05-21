@@ -11,7 +11,6 @@ import {
   getCommentDensity,
   getConfidenceDistribution,
   getErrorTrends,
-  getActivityHeatmap,
   getIssueTriageAnalysis
 } from '../services/analyticsService';
 
@@ -231,7 +230,7 @@ export function useConfidenceDistribution(repoId) {
   return { data, loading, error };
 }
 
-export function useErrorTrends(days = 30) {
+export function useErrorTrends(days = 30, page = 1) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -241,7 +240,7 @@ export function useErrorTrends(days = 30) {
       try {
         setLoading(true);
         setError(null);
-        const result = await getErrorTrends({ days });
+        const result = await getErrorTrends({ days, page });
         setData(result || null);
       } catch (err) {
         console.error('Failed to fetch errors:', err);
@@ -252,33 +251,7 @@ export function useErrorTrends(days = 30) {
       }
     };
     fetch();
-  }, [days]);
-
-  return { data, loading, error };
-}
-
-export function useActivityHeatmap(days = 90) {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const fetch = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await getActivityHeatmap({ days });
-        setData(result || []);
-      } catch (err) {
-        console.error('Failed to fetch heatmap:', err);
-        setError('Failed to load heatmap');
-        setData([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetch();
-  }, [days]);
+  }, [days, page]);
 
   return { data, loading, error };
 }

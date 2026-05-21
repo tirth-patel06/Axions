@@ -15,7 +15,7 @@ const errorLogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Optional TTL (30 days). Comment out if persistence is needed longer term.
-errorLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 30 });
+// Optional TTL (90 days). Comment out if persistence is needed longer term.
+errorLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 90 });
 
 module.exports = mongoose.model('ErrorLog', errorLogSchema);

@@ -79,20 +79,6 @@ export const getRepoComparison = async () => {
 };
 
 /**
- * Get activity heatmap
- * @returns {Promise<Object>} Heatmap data
- */
-export const getActivityHeatmap = async () => {
-  try {
-    const response = await api.get('/api/analytics/heatmap');
-    return response.data || {};
-  } catch (error) {
-    console.error('Error fetching activity heatmap:', error);
-    return {};
-  }
-};
-
-/**
  * Get error trends
  * @param {Object} params - Query parameters (days)
  * @returns {Promise<Array>} Error trends data

@@ -20,7 +20,6 @@ const githubRoutes = require("./routes/github");
 const repoRoutes = require("./routes/repos");
 const webhookRoutes = require("./routes/webhooks");
 const analyticsRoutes = require("./routes/analytics");
-const issuesRoutes = require("./routes/issues");
 
 const app = express();
 
@@ -58,7 +57,6 @@ app.use("/api/test", testRoutes);
 app.use("/api/github", githubRoutes);
 app.use("/api/repos", repoRoutes);
 app.use("/api/analytics", analyticsRoutes);
-app.use("/api/issues", issuesRoutes);
 
 // ============================================
 // Health Check Endpoint

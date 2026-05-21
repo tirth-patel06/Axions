@@ -117,14 +117,20 @@ async function getConfidenceDistribution(req, res) {
 /**
  * GET /api/analytics/errors/trends
  * Returns error rate trends for reliability monitoring
- * Query params: days (default 30)
+ * Query params: days (default 30), page (default 1)
  */
 async function getErrorTrends(req, res) {
   try {
     const userId = req.user._id;
     const days = parseInt(req.query.days) || 30;
+    const page = parseInt(req.query.page) || 1;
 
-    const trends = await statsService.getErrorRateTrends({ userId, days });
+    const trends = await statsService.getErrorRateTrends({
+      userId,
+      days,
+      page,
+      perPage: 10
+    });
 
     if (!trends) {
       return res.status(500).json({ error: 'Failed to retrieve error trends' });
@@ -134,43 +140,6 @@ async function getErrorTrends(req, res) {
   } catch (error) {
     console.error('Get error trends error:', error);
     return res.status(500).json({ error: 'Failed to get error trends' });
-  }
-}
-
-/**
- * GET /api/analytics/heatmap
- * Returns activity heatmap data for calendar visualization
- * Query params: days (default 90)
- */
-async function getActivityHeatmap(req, res) {
-  try {
-    const userId = req.user._id;
-    const days = parseInt(req.query.days) || 90;
-
-    const heatmap = await statsService.getActivityHeatmap({ userId, days });
-    return res.json({ heatmap });
-  } catch (error) {
-    console.error('Get activity heatmap error:', error);
-    return res.status(500).json({ error: 'Failed to get activity heatmap' });
-  }
-}
-
-/**
- * GET /api/analytics/issues/timeseries
- * Returns issue triage activity over time for graphs
- * Query params: repoId (optional), days (default 30)
- */
-async function getIssueTriageTimeSeries(req, res) {
-  try {
-    const userId = req.user._id;
-    const repoId = req.query.repoId || null;
-    const days = parseInt(req.query.days) || 30;
-
-    const timeSeries = await statsService.getIssueTriageTimeSeries({ userId, repoId, days });
-    return res.json({ timeSeries });
-  } catch (error) {
-    console.error('Get issue triage time series error:', error);
-    return res.status(500).json({ error: 'Failed to get issue triage time series' });
   }
 }
 
@@ -194,26 +163,6 @@ async function getIssueTriageAnalysis(req, res) {
   }
 }
 
-/**
- * GET /api/analytics/repo/:repoId/labels
- * Returns label distribution for triaged issues in a repo
- */
-async function getLabelDistribution(req, res) {
-  try {
-    const { repoId } = req.params;
-    const distribution = await statsService.getLabelDistribution({ repoId });
-
-    if (!distribution) {
-      return res.status(404).json({ error: 'No data found for this repo' });
-    }
-
-    return res.json(distribution);
-  } catch (error) {
-    console.error('Get label distribution error:', error);
-    return res.status(500).json({ error: 'Failed to get label distribution' });
-  }
-}
-
 module.exports = {
   getUserSummary,
   getRecentActivity,
@@ -222,9 +171,6 @@ module.exports = {
   getCommentDensity,
   getConfidenceDistribution,
   getErrorTrends,
-  getActivityHeatmap,
   // Issue triage endpoints
-  getIssueTriageTimeSeries,
-  getIssueTriageAnalysis,
-  getLabelDistribution
+  getIssueTriageAnalysis
 };

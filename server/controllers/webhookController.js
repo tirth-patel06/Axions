@@ -4,8 +4,17 @@ const { orchestrateReview } = require("../services/reviewService");
 const { generateIssueLabels, generateIssueSummary } = require("../services/llmService");
 const { applyColoredLabels, postIssueSummaryComment } = require("../services/githubService");
 const IssueTriage = require("../models/IssueTriage");
-const { Octokit } = require("@octokit/rest");
 const statsService = require("../services/statsService");
+
+let Octokit;
+
+async function getOctokit() {
+  if (!Octokit) {
+    const mod = await import("@octokit/rest");
+    Octokit = mod.Octokit;
+  }
+  return Octokit;
+}
 
 /**
  * Orchestrates the issue labeling and summarization process
@@ -22,47 +31,44 @@ async function orchestrateIssueLabeling(payload, connectedRepo) {
       repository: { owner: { login: owner }, name: repo },
     } = payload;
 
+    const OctokitClient = await getOctokit();
     // Create Octokit instance with the user's GitHub access token
-    const octokit = new Octokit({ auth: connectedRepo.userId.accessToken });
+    const octokit = new OctokitClient({ auth: connectedRepo.userId.accessToken });
+
+    let labelsApplied = [];
+    let summary = "";
 
     // Step 1: Generate labels using LLM (if feature is enabled)
     if (process.env.FEATURE_ISSUE_LABELING === "true" || process.env.ENABLE_AUTO_LABELS === "true") {
-      const labels = await generateIssueLabels(title, description);
+      labelsApplied = await generateIssueLabels(title, description);
 
-      if (labels.length > 0) {
+      if (labelsApplied.length > 0) {
         // Apply colored labels to the GitHub issue
-        await applyColoredLabels(octokit, owner, repo, issue_number, labels);
+        await applyColoredLabels(octokit, owner, repo, issue_number, labelsApplied);
       }
     }
 
     // Step 2: Generate summary using LLM (if feature is enabled)
     if (process.env.FEATURE_ISSUE_SUMMARIZATION === "true" || process.env.ENABLE_AUTO_SUMMARY === "true") {
-      const summary = await generateIssueSummary(title, description);
+      summary = await generateIssueSummary(title, description);
 
       // Step 3: Post summary as comment
       await postIssueSummaryComment(octokit, owner, repo, issue_number, summary);
     }
 
-    // Step 4: Save triage information to database
-    const issueTriage = await IssueTriage.findOneAndUpdate(
-      {
-        githubRepoId: connectedRepo.githubRepoId,
-        issue_number
-      },
-      {
-        owner,
-        repo,
-        githubRepoId: connectedRepo.githubRepoId,
-        issue_number,
-        userId: connectedRepo.userId._id,
-        repoId: connectedRepo._id,
-        labelsApplied: process.env.FEATURE_ISSUE_LABELING === "true" ? await generateIssueLabels(title, description) : [],
-        summary: process.env.FEATURE_ISSUE_SUMMARIZATION === "true" ? await generateIssueSummary(title, description) : ""
-      },
-      { upsert: true, new: true }
-    );
+    // Step 4: Record triage information to database (with stats)
+    await statsService.recordIssueTriage({
+      owner,
+      repo,
+      githubRepoId: connectedRepo.githubRepoId,
+      issue_number,
+      user: connectedRepo.userId,
+      repoId: connectedRepo._id,
+      labelsApplied,
+      summary
+    });
 
-    return issueTriage;
+    return { success: true, labelsApplied, summary };
   } catch (error) {
     console.error("❌ Error in issue labeling orchestration:", error);
     

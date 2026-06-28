@@ -18,14 +18,14 @@ function App() {
       <Route path="/" element={<HeroPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/success" element={<SuccessPage />} />
-      <Route path="/dashboard" element={<DashboardPage />} />
-      <Route path="/analytics" element={<AnalyticsPage />} />
-      <Route path="/activity" element={<ActivityPage />} />
-      <Route path="/repo-comparison" element={<RepoComparisonPage />} />
-      <Route path="/analysis" element={<DeepAnalysisPage />} />
-      <Route path="/errors" element={<ErrorTrackingPage />} />
-      <Route path="/profile" element={<ProfilePage />} />
-      <Route path="/repositories" element={<RepositoriesPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/activity" element={<ActivityPage />} />
+        <Route path="/repo-comparison" element={<RepoComparisonPage />} />
+        <Route path="/analysis" element={<DeepAnalysisPage />} />
+        <Route path="/errors" element={<ErrorTrackingPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/repositories" element={<RepositoriesPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

@@ -1,4 +1,11 @@
-require("dotenv").config();
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("UNHANDLED REJECTION:", err);
+});
+
 const express = require("express");
 const passport = require("passport");
 const cors = require("cors");
@@ -13,7 +20,6 @@ const githubRoutes = require("./routes/github");
 const repoRoutes = require("./routes/repos");
 const webhookRoutes = require("./routes/webhooks");
 const analyticsRoutes = require("./routes/analytics");
-const issuesRoutes = require("./routes/issues");
 
 const app = express();
 
@@ -27,7 +33,7 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 // ============================================
 // Middleware Configuration
 // ============================================
-app.use(morgan("dev"));
+app.use(morgan(NODE_ENV === "production" ? "combined" : "dev"));
 app.use(cors({ 
   origin: FRONTEND_URL, 
   credentials: true
@@ -36,7 +42,9 @@ app.use(cookieParser());
 app.use(passport.initialize());
 
 // Webhooks need raw body for signature verification; register before express.json
+// Support both direct /webhooks (local) and /api/webhooks (Vercel routing)
 app.use("/webhooks", webhookRoutes);
+app.use("/api/webhooks", webhookRoutes);
 
 // JSON parsing for the rest of the API
 app.use(express.json());
@@ -49,12 +57,11 @@ app.use("/api/test", testRoutes);
 app.use("/api/github", githubRoutes);
 app.use("/api/repos", repoRoutes);
 app.use("/api/analytics", analyticsRoutes);
-app.use("/api/issues", issuesRoutes);
 
 // ============================================
 // Health Check Endpoint
 // ============================================
-app.get("/health", (req, res) => {
+app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "healthy",
     environment: NODE_ENV,

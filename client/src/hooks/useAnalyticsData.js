@@ -11,34 +11,71 @@ import {
   getCommentDensity,
   getConfidenceDistribution,
   getErrorTrends,
-  getActivityHeatmap,
   getIssueTriageAnalysis
 } from '../services/analyticsService';
 
-export function useUserSummary() {
+export function useUserSummary(enabled = true) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
-    const fetch = async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+    
+    let isMounted = true;
+    
+    const fetchSummary = async () => {
       try {
         setLoading(true);
         setError(null);
         const result = await getUserSummary();
-        setData(result || null);
+        
+        if (!isMounted) return;
+        
+        // Check if result is null or an empty object
+        if (result === null) {
+          setError('Failed to load summary');
+          setData(null);
+          return;
+        }
+        
+        // Check for empty object (no meaningful data)
+        const isEmpty = Object.keys(result).length === 0;
+        if (isEmpty) {
+          console.warn('useUserSummary: Received empty data');
+          setError('No summary data available');
+          setData(null);
+          return;
+        }
+        
+        setData(result);
       } catch (err) {
         console.error('Failed to fetch user summary:', err);
-        setError('Failed to load summary');
-        setData(null);
+        if (isMounted) {
+          setError('Failed to load summary');
+          setData(null);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
-    fetch();
-  }, []);
+    
+    fetchSummary();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshTrigger, enabled]);
 
-  return { data, loading, error };
+  const refetch = () => setRefreshTrigger(prev => prev + 1);
+
+  return { data, loading, error, refetch };
 }
 
 export function useReviewTimeSeries(days = 30) {
@@ -67,13 +104,19 @@ export function useReviewTimeSeries(days = 30) {
   return { data, loading, error };
 }
 
-export function useRecentActivity(limit = 20) {
+export function useRecentActivity(limit = 20, enabled = true) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
-    const fetch = async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+    
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
@@ -87,10 +130,12 @@ export function useRecentActivity(limit = 20) {
         setLoading(false);
       }
     };
-    fetch();
-  }, [limit]);
+    fetchData();
+  }, [limit, enabled, refreshTrigger]);
 
-  return { data, loading, error };
+  const refetch = () => setRefreshTrigger(prev => prev + 1);
+
+  return { data, loading, error, refetch };
 }
 
 export function useRepoComparison() {
@@ -185,7 +230,7 @@ export function useConfidenceDistribution(repoId) {
   return { data, loading, error };
 }
 
-export function useErrorTrends(days = 30) {
+export function useErrorTrends(days = 30, page = 1) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -195,7 +240,7 @@ export function useErrorTrends(days = 30) {
       try {
         setLoading(true);
         setError(null);
-        const result = await getErrorTrends({ days });
+        const result = await getErrorTrends({ days, page });
         setData(result || null);
       } catch (err) {
         console.error('Failed to fetch errors:', err);
@@ -206,33 +251,7 @@ export function useErrorTrends(days = 30) {
       }
     };
     fetch();
-  }, [days]);
-
-  return { data, loading, error };
-}
-
-export function useActivityHeatmap(days = 90) {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const fetch = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const result = await getActivityHeatmap({ days });
-        setData(result || []);
-      } catch (err) {
-        console.error('Failed to fetch heatmap:', err);
-        setError('Failed to load heatmap');
-        setData([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetch();
-  }, [days]);
+  }, [days, page]);
 
   return { data, loading, error };
 }

@@ -14,7 +14,7 @@ export default function LoginPage() {
       try {
         setStatus('Authenticating...');
         const { data } = await api.get('/api/test/me');
-        if (data?.user) {
+        if (data?.username) {
           setStatus('Session valid. Redirecting...');
           redirectTimer = setTimeout(() => navigate('/dashboard'), 500);
           return;

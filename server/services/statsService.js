@@ -37,114 +37,63 @@ const IssueTriage = require("../models/IssueTriage");
  */
 async function recordReview({ owner, repo, githubRepoId, pull_number, commit_id, analysis, user, repoId }) {
   try {
-    // Persist review document
-    const saved = await PullRequestReview.create({
-      owner,
-      repo,
-      githubRepoId,
-      pull_number,
-      commit_id,
-      userId: user._id,
-      repoId,
-      filesAnalyzed: analysis?.filesAnalyzed?.length || 0,
-      commentsPosted: analysis?.inlineComments?.length || 0,
-      confidence: analysis?.confidence || "unknown",
-      analysis,
-      analyzedAt: new Date()
-    });
-
-    // Update ConnectedRepo counters atomically (compat)
-    await ConnectedRepo.findByIdAndUpdate(
-      repoId,
+    const inlineCount = analysis?.inlineComments?.length || 0;
+    // Total comments = 1 (review body) + inline comments
+    const totalComments = 1 + inlineCount;
+    
+    // Use upsert to prevent duplicate reviews for same PR+commit
+    // CRITICAL: commentsPosted is ONLY set on insert (locked forever after first write)
+    const result = await PullRequestReview.findOneAndUpdate(
+      { githubRepoId, pull_number, commit_id },
       {
-        $inc: {
-          reviewCount: 1,
-          totalCommentsPosted: analysis?.inlineComments?.length || 0
+        $setOnInsert: {
+          owner,
+          repo,
+          githubRepoId,
+          pull_number,
+          commit_id,
+          userId: user._id,
+          repoId,
+          analyzedAt: new Date(),
+          // Lock commentsPosted on first insert - never update again
+          // Includes: 1 review body comment + N inline comments
+          commentsPosted: totalComments,
+          filesAnalyzed: analysis?.filesAnalyzed?.length || 0,
+          confidence: analysis?.confidence || "unknown"
         },
         $set: {
-          lastReviewedAt: new Date()
+          // Only update analysis data, NOT counts
+          analysis
         }
       },
-      { new: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
-
-    // Upsert aggregated RepoStats (fast reads)
-    const inlineCount = analysis?.inlineComments?.length || 0;
-    await RepoStats.findOneAndUpdate(
-      { repoId },
-      {
-        $setOnInsert: { repoId, githubRepoId, userId: user._id },
-        $inc: {
-          totalPRsReviewed: 1,
-          totalInlineComments: inlineCount,
+    
+    // Check if this was a new record (upserted) or existing (updated)
+    const isNewRecord = !result.updatedAt || result.createdAt.getTime() === result.updatedAt.getTime();
+    
+    if (isNewRecord) {
+      // Update ConnectedRepo counters (for backward compat)
+      await ConnectedRepo.findByIdAndUpdate(
+        repoId,
+        {
+          $inc: { reviewCount: 1 },
+          $set: { lastReviewedAt: new Date() }
         },
-        $set: {
-          lastPRReviewedAt: new Date(),
-          lastActivityAt: new Date(),
-        },
-      },
-      { upsert: true, new: true }
-    );
+        { new: true }
+      );
+    }
+    
+    // NO RepoStats mutation here - rebuildRepoStats() is the single source of truth
+    // This prevents $inc corruption from webhooks, retries, and LLM hallucinations
+    
+    const saved = result;
 
     console.log(`✅ Recorded review stats: ${owner}/${repo}#${pull_number}`);
     return saved;
   } catch (error) {
     console.error("❌ Failed to record review:", error.message);
     // Don't throw - stats recording is secondary
-    return null;
-  }
-}
-
-/**
- * Increments review count for a repository
- * 
- * @param {string} repoId - MongoDB ObjectId of ConnectedRepo
- * @returns {Promise<void>}
- */
-// incrementReviewCount no longer needed (handled in recordReview)
-async function incrementReviewCount() {
-  return;
-}
-
-/**
- * Gets review statistics for a repository
- * 
- * @param {string} repoId - MongoDB ObjectId of ConnectedRepo
- * @returns {Promise<Object>} Statistics summary
- * 
- * @example
- * const stats = await getRepoStats(repoId);
- * // Returns: {
- * //   totalReviews: 10,
- * //   totalComments: 45,
- * //   averageCommentsPerReview: 4.5,
- * //   byCategory: {...},
- * //   lastReview: Date
- * // }
- */
-async function getRepoStats(repoId) {
-  try {
-    const stats = await RepoStats.findOne({ repoId }).lean();
-    if (!stats) {
-      return {
-        totalPRsReviewed: 0,
-        totalInlineComments: 0,
-        totalIssuesTriaged: 0,
-        totalLabelsApplied: 0,
-        totalErrors: 0,
-        lastActivityAt: null,
-      };
-    }
-    return {
-      totalPRsReviewed: stats.totalPRsReviewed || 0,
-      totalInlineComments: stats.totalInlineComments || 0,
-      totalIssuesTriaged: stats.totalIssuesTriaged || 0,
-      totalLabelsApplied: stats.totalLabelsApplied || 0,
-      totalErrors: stats.totalErrors || 0,
-      lastActivityAt: stats.lastActivityAt || null,
-    };
-  } catch (error) {
-    console.error("❌ Failed to get repo stats:", error.message);
     return null;
   }
 }
@@ -197,32 +146,38 @@ async function recordError({ owner, repo, githubRepoId, pull_number, error, user
  */
 async function recordIssueTriage({ owner, repo, githubRepoId, issue_number, user, labelsApplied = [], summary = "", repoId }) {
   try {
-    await IssueTriage.create({
-      owner,
-      repo,
-      githubRepoId,
-      issue_number,
-      userId: user._id,
-      repoId,
-      labelsApplied,
-      summary,
-    });
-
-    await RepoStats.findOneAndUpdate(
-      { repoId },
+    // Use upsert to prevent duplicate issue triage records
+    // CRITICAL: labelsApplied is ONLY set on insert (locked forever after first triage)
+    const result = await IssueTriage.findOneAndUpdate(
+      { githubRepoId, issue_number },
       {
-        $setOnInsert: { repoId, githubRepoId, userId: user._id },
-        $inc: {
-          totalIssuesTriaged: 1,
-          totalLabelsApplied: Array.isArray(labelsApplied) ? labelsApplied.length : 0,
-        },
-        $set: {
-          lastIssueTriagedAt: new Date(),
-          lastActivityAt: new Date(),
-        },
+        $setOnInsert: {
+          owner,
+          repo,
+          githubRepoId,
+          issue_number,
+          userId: user._id,
+          repoId,
+          // Lock labels on first insert - never update again
+          labelsApplied,
+          summary
+        }
+        // NO $set - if issue already triaged, we don't re-triage
       },
-      { upsert: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
+    
+    // Check if this was a new record (upserted) or existing (updated)
+    const isNewRecord = !result.updatedAt || result.createdAt.getTime() === result.updatedAt.getTime();
+    
+    if (!isNewRecord) {
+      // Issue already triaged - do not update labels or stats
+      console.log(`⏭️  Issue #${issue_number} already triaged, skipping`);
+      return result;
+    }
+    
+    // NO RepoStats mutation here - rebuildRepoStats() is the single source of truth
+    // This prevents $inc corruption from webhooks, retries, and label hallucinations
 
     console.log(`✅ Recorded issue triage: ${owner}/${repo}#${issue_number}`);
   } catch (error) {
@@ -239,6 +194,8 @@ async function recordIssueTriage({ owner, repo, githubRepoId, issue_number, user
  * @param {string} userId - User MongoDB ObjectId
  * @param {string} repoId - Optional repo filter
  * @param {number} days - Number of days to look back (default 30)
+ * @param {number} page - Page number for recent errors (default 1)
+ * @param {number} perPage - Errors per page (default 10)
  * @returns {Promise<Array>} Daily activity data: [{ date, reviewCount, commentCount }]
  */
 async function getReviewTimeSeries({ userId, repoId = null, days = 30 }) {
@@ -268,7 +225,7 @@ async function getReviewTimeSeries({ userId, repoId = null, days = 30 }) {
 
     return Array.from(dailyMap.values());
   } catch (error) {
-    console.error("❌ Failed to get review time series:", error.message);
+    console.error("Failed to get review time series:", error.message);
     return [];
   }
 }
@@ -321,7 +278,7 @@ async function getRecentActivity({ userId, limit = 20 }) {
 
     return combined;
   } catch (error) {
-    console.error("❌ Failed to get recent activity:", error.message);
+    console.error("Failed to get recent activity:", error.message);
     return [];
   }
 }
@@ -357,7 +314,7 @@ async function getUserSummary({ userId }) {
       avgCommentsPerPR: totalPRsReviewed > 0 ? (totalInlineComments / totalPRsReviewed).toFixed(1) : 0
     };
   } catch (error) {
-    console.error("❌ Failed to get user summary:", error.message);
+    console.error("Failed to get user summary:", error.message);
     return null;
   }
 }
@@ -398,32 +355,44 @@ async function getCommentDensityAnalysis({ repoId }) {
  * Get error rate trends (for reliability monitoring)
  * @param {string} userId - User MongoDB ObjectId
  * @param {number} days - Number of days to look back (default 30)
+ * @param {number} page - Number of page (default 1)
+ * @param {number} perPage - Number of log per page (default 10)
  * @returns {Promise<Object>} Error metrics
  */
-async function getErrorRateTrends({ userId, days = 30 }) {
+async function getErrorRateTrends({ userId, days = 30, page = 1, perPage = 10 }) {
   try {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const [errors, reviews] = await Promise.all([
+    const safePage = Number.isFinite(page) ? Math.max(page, 1) : 1;
+    const safePerPage = Number.isFinite(perPage) ? Math.max(perPage, 1) : 10;
+    const skip = (safePage - 1) * safePerPage;
+
+    const [errors, reviews, triages] = await Promise.all([
       ErrorLog.countDocuments({ userId, createdAt: { $gte: startDate } }),
-      PullRequestReview.countDocuments({ userId, createdAt: { $gte: startDate } })
+      PullRequestReview.countDocuments({ userId, createdAt: { $gte: startDate } }),
+      IssueTriage.countDocuments({ userId, createdAt: { $gte: startDate } })
     ]);
 
-    const totalEvents = errors + reviews;
+    const totalEvents = errors + reviews + triages;
     const errorRate = totalEvents > 0 ? ((errors / totalEvents) * 100).toFixed(2) : 0;
 
     // Get recent errors for debugging - filtered by time period
     const recentErrors = await ErrorLog.find({ userId, createdAt: { $gte: startDate } })
       .select('owner repo pull_number error createdAt')
       .sort({ createdAt: -1 })
-      .limit(5)
+      .skip(skip)
+      .limit(safePerPage)
       .lean();
 
     return {
       totalErrors: errors,
       totalReviews: reviews,
+      totalTriages: triages,
       errorRate: `${errorRate}%`,
+      page: safePage,
+      perPage: safePerPage,
+      totalPages: Math.max(Math.ceil(errors / safePerPage), 1),
       recentErrors: recentErrors.map(e => ({
         repo: `${e.owner}/${e.repo}`,
         prNumber: e.pull_number,
@@ -453,7 +422,7 @@ async function rebuildRepoStats({ userId }) {
     const triages = await IssueTriage.find({ userId })
       .select('repoId labelsApplied')
       .lean();
-
+          
     const statsMap = new Map();
     
     // Process PR reviews
@@ -462,13 +431,14 @@ async function rebuildRepoStats({ userId }) {
         statsMap.set(r.repoId.toString(), {
           repoId: r.repoId,
           totalPRsReviewed: 0,
-          totalInlineComments: 0,
+          totalInlineComments: 0,  // This now stores TOTAL comments (body + inline)
           totalIssuesTriaged: 0,
           totalLabelsApplied: 0
         });
       }
       const stat = statsMap.get(r.repoId.toString());
       stat.totalPRsReviewed++;
+      // commentsPosted already includes review body + inline comments
       stat.totalInlineComments += r.commentsPosted || 0;
     });
 
@@ -486,15 +456,17 @@ async function rebuildRepoStats({ userId }) {
       }
       const stat = statsMap.get(repoIdStr);
       stat.totalIssuesTriaged++;
-      stat.totalLabelsApplied += Array.isArray(t.labelsApplied) ? t.labelsApplied.length : 0;
+      const uniqueLabels = new Set(t.labelsApplied);
+      stat.totalLabelsApplied += uniqueLabels.size;
     });
 
     // Bulk update all RepoStats
     for (const [repoIdStr, stat] of statsMap) {
       await RepoStats.findOneAndUpdate(
-        { repoId: stat.repoId },
+        { repoId: stat.repoId, userId },
         {
           $set: {
+            userId,
             totalPRsReviewed: stat.totalPRsReviewed,
             totalInlineComments: stat.totalInlineComments,
             totalIssuesTriaged: stat.totalIssuesTriaged,
@@ -553,35 +525,6 @@ async function getRepoComparison({ userId }) {
 }
 
 /**
- * Get PR review heatmap data (for activity visualization)
- * @param {string} userId - User MongoDB ObjectId
- * @param {number} days - Number of days to look back (default 90)
- * @returns {Promise<Array>} Daily activity: [{ date, count }] for calendar heatmap
- */
-async function getActivityHeatmap({ userId, days = 90 }) {
-  try {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    const reviews = await PullRequestReview.aggregate([
-      { $match: { userId, createdAt: { $gte: startDate } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { '_id': 1 } }
-    ]);
-
-    return reviews.map(r => ({ date: r._id, count: r.count }));
-  } catch (error) {
-    console.error("❌ Failed to get activity heatmap:", error.message);
-    return [];
-  }
-}
-
-/**
  * Get confidence score distribution (for AI quality insights)
  * @param {string} repoId - Repository MongoDB ObjectId
  * @returns {Promise<Object>} Confidence breakdown
@@ -605,45 +548,6 @@ async function getConfidenceDistribution({ repoId }) {
   } catch (error) {
     console.error("❌ Failed to get confidence distribution:", error.message);
     return null;
-  }
-}
-
-/**
- * Get issue triage time series (for graphs)
- * @param {string} userId - User MongoDB ObjectId
- * @param {string} repoId - Optional repo filter
- * @param {number} days - Number of days to look back (default 30)
- * @returns {Promise<Array>} Daily triage data: [{ date, triageCount, labelsCount }]
- */
-async function getIssueTriageTimeSeries({ userId, repoId = null, days = 30 }) {
-  try {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    const query = { userId, createdAt: { $gte: startDate } };
-    if (repoId) query.repoId = repoId;
-
-    const triages = await IssueTriage.find(query)
-      .select('createdAt labelsApplied')
-      .sort({ createdAt: 1 })
-      .lean();
-
-    // Group by date
-    const dailyMap = new Map();
-    triages.forEach(t => {
-      const dateKey = t.createdAt.toISOString().split('T')[0];
-      if (!dailyMap.has(dateKey)) {
-        dailyMap.set(dateKey, { date: dateKey, triageCount: 0, labelsCount: 0 });
-      }
-      const day = dailyMap.get(dateKey);
-      day.triageCount++;
-      day.labelsCount += Array.isArray(t.labelsApplied) ? t.labelsApplied.length : 0;
-    });
-
-    return Array.from(dailyMap.values());
-  } catch (error) {
-    console.error("❌ Failed to get issue triage time series:", error.message);
-    return [];
   }
 }
 
@@ -690,45 +594,8 @@ async function getIssueTriageAnalysis({ repoId }) {
   }
 }
 
-/**
- * Get label distribution across triaged issues
- * @param {string} repoId - Repository MongoDB ObjectId
- * @returns {Promise<Object>} Label usage breakdown
- */
-async function getLabelDistribution({ repoId }) {
-  try {
-    const triages = await IssueTriage.find({ repoId })
-      .select('labelsApplied')
-      .lean();
-
-    const labelCounts = {};
-    triages.forEach(t => {
-      if (Array.isArray(t.labelsApplied)) {
-        t.labelsApplied.forEach(label => {
-          labelCounts[label] = (labelCounts[label] || 0) + 1;
-        });
-      }
-    });
-
-    // Sort by count descending
-    const sorted = Object.entries(labelCounts)
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count);
-
-    return {
-      totalLabels: Object.keys(labelCounts).length,
-      distribution: sorted
-    };
-  } catch (error) {
-    console.error("❌ Failed to get label distribution:", error.message);
-    return null;
-  }
-}
-
 module.exports = {
   recordReview,
-  incrementReviewCount,
-  getRepoStats,
   recordError,
   recordIssueTriage,
   rebuildRepoStats,
@@ -739,10 +606,7 @@ module.exports = {
   getCommentDensityAnalysis,
   getErrorRateTrends,
   getRepoComparison,
-  getActivityHeatmap,
   getConfidenceDistribution,
   // Issue triage analytics
-  getIssueTriageTimeSeries,
-  getIssueTriageAnalysis,
-  getLabelDistribution
+  getIssueTriageAnalysis
 };

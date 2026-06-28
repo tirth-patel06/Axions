@@ -1,6 +1,15 @@
 const ConnectedRepo = require("../models/ConnectedRepo");
-const { Octokit } = require("@octokit/rest");
 const crypto = require("crypto");
+
+let Octokit;
+
+async function getOctokit() {
+  if (!Octokit) {
+    const mod = await import("@octokit/rest");
+    Octokit = mod.Octokit;
+  }
+  return Octokit;
+}
 
 /*POST /api/repos/connect*/
 async function connectRepo(req, res) {
@@ -39,7 +48,8 @@ async function connectRepo(req, res) {
     }
 
     // create webhook on GitHub
-    const octokit = new Octokit({ auth: user.accessToken });
+    const OctokitClient = await getOctokit();
+    const octokit = new OctokitClient({ auth: user.accessToken });
     const webhookSecret = crypto.randomBytes(32).toString("hex");
 
     const webhook = await octokit.rest.repos.createWebhook({
@@ -160,8 +170,6 @@ async function disconnectRepo(req, res) {
     const user = req.user;
     const { repoId } = req.params;
 
-    console.log('Disconnect request for repoId:', repoId);
-
     // Find repo (must belong to current user)
     const connectedRepo = await ConnectedRepo.findOne({
       _id: repoId,
@@ -175,10 +183,9 @@ async function disconnectRepo(req, res) {
       });
     }
 
-    console.log('Found connected repo:', connectedRepo.fullName);
-
     // Delete webhook from GitHub
-    const octokit = new Octokit({ auth: user.accessToken });
+    const OctokitClient = await getOctokit();
+    const octokit = new OctokitClient({ auth: user.accessToken });
     try {
       if (connectedRepo.webhookId) {
         await octokit.rest.repos.deleteWebhook({
@@ -186,7 +193,6 @@ async function disconnectRepo(req, res) {
           repo: connectedRepo.name,
           hook_id: connectedRepo.webhookId,
         });
-        console.log(`✅ Webhook deleted for ${connectedRepo.fullName}`);
       }
     } catch (webhookErr) {
       // Log but don't fail - webhook might already be deleted
@@ -201,9 +207,7 @@ async function disconnectRepo(req, res) {
     connectedRepo.webhookSecret = null;
     connectedRepo.webhookId = null;
     await connectedRepo.save();
-
-    console.log('✅ Repository disconnected successfully');
-
+    
     return res.json({
       message: 'Repository disconnected successfully',
       repo: {

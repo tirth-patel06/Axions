@@ -103,9 +103,9 @@ async function orchestrateReview(payload, connectedRepo) {
       review
     });
 
-    // Step 6: Record statistics (async, non-blocking)
+    // Step 6: Record statistics
     console.log("📊 Recording statistics...");
-    recordStatsAsync({
+    await statsService.recordReview({
       owner,
       repo,
       githubRepoId: connectedRepo.githubRepoId,
@@ -140,8 +140,8 @@ async function orchestrateReview(payload, connectedRepo) {
       console.error("⚠️  Could not post error comment:", commentErr.message);
     }
 
-    // Record error (async, non-blocking)
-    recordErrorAsync({
+    // Record error
+    await statsService.recordError({
       owner,
       repo,
       githubRepoId: connectedRepo.githubRepoId,
@@ -158,54 +158,6 @@ async function orchestrateReview(payload, connectedRepo) {
       error: error.message
     };
   }
-}
-
-/**
- * Records stats asynchronously (fire and forget)
- * Don't block the main request
- * 
- * @private
- */
-function recordStatsAsync({ owner, repo, githubRepoId, pull_number, commit_id, analysis, user, repoId }) {
-  setImmediate(async () => {
-    try {
-      await statsService.recordReview({
-        owner,
-        repo,
-        githubRepoId,
-        pull_number,
-        commit_id,
-        analysis,
-        user,
-        repoId
-      });
-    } catch (error) {
-      console.error("⚠️  Stats recording failed (non-critical):", error.message);
-    }
-  });
-}
-
-/**
- * Records errors asynchronously (fire and forget)
- * Don't block the main request
- * 
- * @private
- */
-function recordErrorAsync({ owner, repo, githubRepoId, pull_number, error, user }) {
-  setImmediate(async () => {
-    try {
-      await statsService.recordError({
-        owner,
-        repo,
-        githubRepoId,
-        pull_number,
-        error,
-        user
-      });
-    } catch (err) {
-      console.error("⚠️  Error recording failed (non-critical):", err.message);
-    }
-  });
 }
 
 module.exports = { orchestrateReview };

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertTriangle, Calendar, AlertCircle } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import MetricCard from '../components/MetricCard';
@@ -6,7 +6,12 @@ import { useErrorTrends } from '../hooks/useAnalyticsData';
 
 export default function ErrorTrackingPage() {
   const [days, setDays] = useState(30);
-  const { data, loading, error } = useErrorTrends(days);
+  const [page, setPage] = useState(1);
+  const { data, loading, error } = useErrorTrends(days, page);
+
+  useEffect(() => {
+    setPage(1);
+  }, [days]);
 
   const totalErrors = data?.totalErrors || 0;
   const errorRateNum = parseFloat(data?.errorRate) || 0;
@@ -100,6 +105,29 @@ export default function ErrorTrackingPage() {
             ) : data?.recentErrors && data.recentErrors.length > 0 ? (
               <>
                 <SimpleChart recentErrors={data.recentErrors} />
+                <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
+                  <p className="text-gray-500 text-sm">
+                    Page {data.page || page} of {data.totalPages || 1}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                      disabled={(data.page || page) <= 1}
+                      className="px-3 py-1.5 text-sm rounded-lg border border-white/10 text-gray-300 hover:text-white hover:border-white/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage((prev) => prev + 1)}
+                      disabled={(data.page || page) >= (data.totalPages || 1)}
+                      className="px-3 py-1.5 text-sm rounded-lg border border-white/10 text-gray-300 hover:text-white hover:border-white/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
               </>
             ) : (
               <div className="h-48 flex items-center justify-center">

@@ -2,6 +2,7 @@
 const passport = require("passport");
 const GitHubStrategy = require("passport-github2").Strategy;
 const User = require("../models/User");
+const connectDB = require("../lib/mongoose");
 
 passport.use(
   new GitHubStrategy(
@@ -13,6 +14,8 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
+        await connectDB();
+
         let user = await User.findOne({ githubId: profile.id });
 
 

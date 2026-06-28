@@ -17,6 +17,6 @@ const issueTriageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-issueTriageSchema.index({ githubRepoId: 1, issue_number: 1 });
+issueTriageSchema.index({ githubRepoId: 1, issue_number: 1 }, { unique: true });
 
 module.exports = mongoose.model("IssueTriage", issueTriageSchema);

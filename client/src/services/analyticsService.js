@@ -17,15 +17,34 @@ export const getRecentActivity = async (limit = 25) => {
 
 /**
  * Get user summary (KPIs)
- * @returns {Promise<Object>} Summary data
+ * @returns {Promise<Object|null>} Summary data or null on error
  */
 export const getUserSummary = async () => {
   try {
     const response = await api.get('/api/analytics/summary');
-    return response.data;
+    const data = response.data;
+    
+    // Validate that we received actual data with expected fields
+    if (!data || typeof data !== 'object') {
+      console.warn('getUserSummary: Invalid response format');
+      return null;
+    }
+    
+    // Check if we have any meaningful data (not just an empty object)
+    const hasData = data.totalPRsReviewed !== undefined || 
+                    data.totalInlineComments !== undefined ||
+                    data.connectedReposCount !== undefined;
+    
+    if (!hasData) {
+      console.warn('getUserSummary: Response missing expected fields', data);
+      // Still return the data, but log warning for debugging
+    }
+    
+    return data;
   } catch (error) {
-    console.error('Error fetching user summary:', error);
-    return {};
+    console.error('Error fetching user summary:', error?.response?.data || error.message);
+    // Return null instead of empty object so callers can detect failure
+    return null;
   }
 };
 
@@ -56,20 +75,6 @@ export const getRepoComparison = async () => {
   } catch (error) {
     console.error('Error fetching repo comparison:', error);
     return [];
-  }
-};
-
-/**
- * Get activity heatmap
- * @returns {Promise<Object>} Heatmap data
- */
-export const getActivityHeatmap = async () => {
-  try {
-    const response = await api.get('/api/analytics/heatmap');
-    return response.data || {};
-  } catch (error) {
-    console.error('Error fetching activity heatmap:', error);
-    return {};
   }
 };
 

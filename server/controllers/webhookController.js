@@ -92,7 +92,7 @@ async function orchestrateIssueLabeling(payload, connectedRepo) {
   }
 }
 
-async function githubWebhookHandler(req, res) {
+function githubWebhookHandler(req, res) {
   try {
     const signature = req.headers["x-hub-signature-256"];
     const event = req.headers["x-github-event"];
@@ -118,48 +118,58 @@ async function githubWebhookHandler(req, res) {
       return res.status(400).send("Repository not found in payload");
     }
 
-    const connectedRepo = await ConnectedRepo.findOne({
+    ConnectedRepo.findOne({
       githubRepoId,
       isConnected: true,
-    }).populate("userId");
+    })
+      .populate("userId")
+      .then((connectedRepo) => {
+        if (!connectedRepo || !connectedRepo.webhookSecret) {
+          return res.status(404).send("Repo not connected");
+        }
 
-    if (!connectedRepo || !connectedRepo.webhookSecret) {
-      return res.status(404).send("Repo not connected");
-    }
+        // Verify signature
+        const hmac = crypto.createHmac(
+          "sha256",
+          connectedRepo.webhookSecret
+        );
 
-    // Verify signature
-    const hmac = crypto.createHmac(
-      "sha256",
-      connectedRepo.webhookSecret
-    );
+        const digest =
+          "sha256=" + hmac.update(req.body).digest("hex");
 
-    const digest =
-      "sha256=" + hmac.update(req.body).digest("hex");
+        const sigBuffer = Buffer.from(signature);
+        const digestBuffer = Buffer.from(digest);
 
-    const sigBuffer = Buffer.from(signature);
-    const digestBuffer = Buffer.from(digest);
+        if (
+          sigBuffer.length !== digestBuffer.length ||
+          !crypto.timingSafeEqual(sigBuffer, digestBuffer)
+        ) {
+          return res.status(401).send("Invalid signature");
+        }
 
-    if (
-      sigBuffer.length !== digestBuffer.length ||
-      !crypto.timingSafeEqual(sigBuffer, digestBuffer)
-    ) {
-      return res.status(401).send("Invalid signature");
-    }
+        // Route events
+        if (event === "pull_request") {
+          // Handle both opened and synchronize (new commits) events
+          if (payload.action === "opened" || payload.action === "synchronize") {
+            orchestrateReview(payload, connectedRepo).catch(err => {
+              console.error("Background PR Review failed:", err);
+            });
+          }
+        } else if (event === "issues") {
+          // Handle issue opened event for labeling and summarization
+          if (payload.action === "opened") {
+            orchestrateIssueLabeling(payload, connectedRepo).catch(err => {
+              console.error("Background Issue Labeling failed:", err);
+            });
+          }
+        }
 
-    // Route events
-    if (event === "pull_request") {
-      // Handle both opened and synchronize (new commits) events
-      if (payload.action === "opened" || payload.action === "synchronize") {
-        await orchestrateReview(payload, connectedRepo);
-      }
-    } else if (event === "issues") {
-      // Handle issue opened event for labeling and summarization
-      if (payload.action === "opened") {
-        await orchestrateIssueLabeling(payload, connectedRepo);
-      }
-    }
-
-    return res.status(200).send("OK");
+        return res.status(200).send("OK");
+      })
+      .catch((err) => {
+        console.error("Webhook error:", err);
+        return res.status(500).send("Webhook handler failed");
+      });
   } catch (err) {
     console.error("Webhook error:", err);
     return res.status(500).send("Webhook handler failed");
